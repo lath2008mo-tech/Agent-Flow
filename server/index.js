@@ -15,6 +15,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Appen ligger på /app, hemsidan på /
+const sendApp = (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'app.html'));
+app.get('/app', sendApp);
+app.get('/app/*', sendApp);
+
 const MAX_TOOL_STEPS = 8;
 const MAX_HISTORY = 30;
 
@@ -255,7 +260,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// SPA-fallback
+// Fallback: hemsidan
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
