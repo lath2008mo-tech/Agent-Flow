@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: agent-flow
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Sätt dessa i Render Dashboard (Environment) i stället för här:
+      # - key: SHOPIFY_STORE
+      #   sync: false
+      # - key: SHOPIFY_TOKEN
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      # - key: GEMINI_API_KEY
+      #   sync: false
+      # - key: OPENROUTER_API_KEY
+      #   sync: false

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Flow – AI-hubb för din butik</title>
+  <meta name="description" content="Koppla Shopify, prata med alla AI-modeller och låt AI:n sköta butiken.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%238A05FF'/%3E%3Cpath d='M28 38h44M28 52h44M28 66h22' stroke='%2359FFA4' stroke-width='9' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidomeny -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 100 100" width="34" height="34"><rect width="100" height="100" rx="22" fill="#8A05FF"/><path d="M28 38h44M28 52h44M28 66h22" stroke="#59FFA4" stroke-width="9" stroke-linecap="round"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">Agent Flow</div>
+          <div class="brand-tag">AI-hubb för din butik</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#/oversikt" data-route="oversikt" class="nav-item">
+          <span class="nav-icon">◎</span> Översikt
+        </a>
+        <a href="#/assistent" data-route="assistent" class="nav-item">
+          <span class="nav-icon">✦</span> AI-Assistent
+        </a>
+        <a href="#/integrationer" data-route="integrationer" class="nav-item">
+          <span class="nav-icon">⇄</span> Integrationer
+        </a>
+        <a href="#/modeller" data-route="modeller" class="nav-item">
+          <span class="nav-icon">◈</span> Alla AI-modeller
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-pill" id="sidebar-status">
+          <span class="dot"></span> Kontrollerar…
+        </div>
+        <div class="sidebar-note">Nycklar sparas endast på din server.</div>
+      </div>
+    </aside>
+
+    <!-- Innehåll -->
+    <main class="main">
+      <!-- ============ ÖVERSIKT ============ -->
+      <section id="view-oversikt" class="view">
+        <header class="view-header">
+          <h1>Översikt</h1>
+          <p class="view-sub">Din butik och dina AI-assistenter på ett ställe.</p>
+        </header>
+
+        <div class="cards">
+          <div class="card" id="card-shopify">
+            <div class="card-title">🛒 Shopify</div>
+            <div class="card-body" id="shopify-status-body">
+              <div class="skeleton">Laddar…</div>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#/integrationer">Hantera koppling →</a>
+          </div>
+
+          <div class="card">
+            <div class="card-title">✦ AI-leverantörer</div>
+            <div class="card-body" id="providers-status-body">
+              <div class="skeleton">Laddar…</div>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#/integrationer">Lägg till nycklar →</a>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📈 Butiksstatistik (30 dagar)</div>
+            <div class="card-body" id="stats-body">
+              <div class="skeleton">Laddar…</div>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title">Snabbflöden</h2>
+        <p class="view-sub">Klicka – så sköter AI:n resten i chatten.</p>
+        <div class="flows" id="flows">
+          <button class="flow" data-prompt="Sammanfatta hur min butik har gått de senaste 30 dagarna: ordrar, intäkter och topprodukter. Ge tre konkreta förbättringsförslag.">
+            <span class="flow-icon">📊</span>
+            <span class="flow-title">Sammanfatta försäljningen</span>
+            <span class="flow-desc">Ordrar, intäkter, topprodukter + förslag</span>
+          </button>
+          <button class="flow" data-prompt="Hitta produkter som saknar eller har mycket tunna beskrivningar, och skriv bättre SEO-vänliga beskrivningar till dem. Fråga mig vilka jag vill uppdatera först.">
+            <span class="flow-icon">✍️</span>
+            <span class="flow-title">Skriv produktbeskrivningar</span>
+            <span class="flow-desc">SEO-texter till tunna produktsidor</span>
+          </button>
+          <button class="flow" data-prompt="Lista mina 10 senaste ordrarna och flagga de som behöver åtgärdas (obetalade, ofullständiga adresser, VIP-kunder). Föreslå taggar jag kan lägga på dem.">
+            <span class="flow-icon">📦</span>
+            <span class="flow-title">Granska senaste ordrarna</span>
+            <span class="flow-desc">Flagga ordrar som behöver åtgärd</span>
+          </button>
+          <button class="flow" data-prompt="Analysera mina produkter och föreslå en rea: vilka produkter bör reas ut, till vilket pris, och skapa sedan en rabattkod åt mig när jag har godkänt förslaget.">
+            <span class="flow-icon">🏷️</span>
+            <span class="flow-title">Planera en rea</span>
+            <span class="flow-desc">Reaprodukter + rabattkod</span>
+          </button>
+          <button class="flow" data-prompt="Lista mina kunder som har handlat mest och föreslå ett personligt VIP-erbjudande till dem.">
+            <span class="flow-icon">👑</span>
+            <span class="flow-title">Hitta VIP-kunder</span>
+            <span class="flow-desc">Toppkunder + personliga erbjudanden</span>
+          </button>
+          <button class="flow" data-prompt="Hjälp mig skapa en ny produkt: ställ frågor om namn, pris och beskrivning, föreslå en säljande text och skapa sedan produkten i butiken.">
+            <span class="flow-icon">🆕</span>
+            <span class="flow-title">Skapa en produkt</span>
+            <span class="flow-desc">AI:n guidar dig hela vägen</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============ AI-ASSISTENT ============ -->
+      <section id="view-assistent" class="view">
+        <header class="view-header chat-header">
+          <div>
+            <h1>AI-Assistent</h1>
+            <p class="view-sub">Fråga vad som helst om din butik – AI:n hämtar data och gör ändringar åt dig.</p>
+          </div>
+          <div class="chat-controls">
+            <select id="model-select" class="select" title="Välj AI-modell"></select>
+            <button id="clear-chat" class="btn btn-ghost btn-sm" title="Rensa chatten">Rensa</button>
+          </div>
+        </header>
+
+        <div class="chat" id="chat">
+          <div class="chat-empty" id="chat-empty">
+            <div class="chat-empty-icon">✦</div>
+            <h2>Hej! Jag är din AI-assistent.</h2>
+            <p>Jag kan läsa och styra din Shopify-butik. Prova t.ex.:</p>
+            <div class="chat-suggestions">
+              <button class="chip" data-prompt="Vilka produkter har sålt bäst den senaste månaden?">Vilka produkter har sålt bäst?</button>
+              <button class="chip" data-prompt="Skapa en produkt med titeln \"Testprodukt\" och pris 199 kr.">Skapa en testprodukt</button>
+              <button class="chip" data-prompt="Sammanfatta dagens ordrar.">Sammanfatta dagens ordrar</button>
+              <button class="chip" data-prompt="Skapa en rabattkod SOMMAR10 med 10% rabatt.">Skapa rabattkod SOMMAR10</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input-box">
+            <textarea id="chat-input" rows="1" placeholder="Skriv till AI:n… (Enter skickar, Shift+Enter ny rad)"></textarea>
+            <button id="send-btn" class="btn btn-primary send-btn">
+              Skicka <span class="send-icon">➤</span>
+            </button>
+          </div>
+          <div class="chat-hint" id="chat-hint">AI:n kan hämta och ändra produkter, ordrar, kunder, lager och rabatter i din Shopify-butik.</div>
+        </div>
+      </section>
+
+      <!-- ============ INTEGRATIONER ============ -->
+      <section id="view-integrationer" class="view">
+        <header class="view-header">
+          <h1>Integrationer</h1>
+          <p class="view-sub">Koppla din butik och dina AI-konton. Allt sparas säkert på servern.</p>
+        </header>
+
+        <!-- Shopify -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2>🛒 Shopify</h2>
+            <span class="badge" id="shopify-badge">Ej ansluten</span>
+          </div>
+          <p class="panel-desc">Skapa en <strong>Custom App</strong> i Shopify-admin och klistra in Admin API-token här.</p>
+
+          <details class="howto">
+            <summary>Så här gör du (tar 2 minuter)</summary>
+            <ol>
+              <li>Gå till <code>Butiksdin admin → Appar → Utveckla appar</code> (eller <code>admin.shopify.com/store/DIN-BUTIK/apps/development</code>).</li>
+              <li>Klicka <strong>Skapa en app</strong> → ge den namnet t.ex. <em>Agent Flow</em>.</li>
+              <li>Gå till <strong>Configuration → Admin API integration → Configure</strong>.</li>
+              <li>Välj behörigheter (scopes): <code>read_products</code>, <code>write_products</code>, <code>read_orders</code>, <code>write_orders</code>, <code>read_customers</code>, <code>read_inventory</code>, <code>write_inventory</code>, <code>read_price_rules</code>, <code>write_price_rules</code>, <code>read_content</code>.</li>
+              <li>Spara och klicka <strong>Install app</strong>.</li>
+              <li>Kopiera <strong>Admin API access token</strong> (börjar med <code>shpat_</code>) och klistra in nedan.</li>
+            </ol>
+          </details>
+
+          <form id="shopify-form" class="form">
+            <div class="form-row">
+              <label for="shopify-store">Butiksadress</label>
+              <input id="shopify-store" type="text" placeholder="minbutik eller minbutik.myshopify.com" autocomplete="off">
+            </div>
+            <div class="form-row">
+              <label for="shopify-token">Admin API access token</label>
+              <input id="shopify-token" type="password" placeholder="shpat_..." autocomplete="off">
+              <div class="form-hint" id="shopify-token-hint"></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Spara koppling</button>
+              <button type="button" id="shopify-test" class="btn btn-ghost">Testa anslutning</button>
+              <button type="button" id="shopify-clear" class="btn btn-danger-ghost">Koppla ifrån</button>
+            </div>
+          </form>
+          <div class="form-result" id="shopify-result"></div>
+        </div>
+
+        <!-- AI-leverantörer -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2>✦ AI-leverantörer</h2>
+            <span class="badge badge-green" id="providers-badge">–</span>
+          </div>
+          <p class="panel-desc">Lägg in API-nycklar från de leverantörer du vill använda. Ju fler nycklar – desto fler modeller i chatten. Använd <strong>OpenRouter</strong> för att få tillgång till <em>alla</em> modeller med en enda nyckel.</p>
+          <div class="provider-grid" id="provider-forms"></div>
+        </div>
+
+        <!-- Säkerhet -->
+        <div class="panel">
+          <div class="panel-head"><h2>🔒 Säkerhet</h2></div>
+          <div class="form-row toggle-row">
+            <div>
+              <strong>Tillåt raderingar</strong>
+              <div class="form-hint">När avstängt kan AI:n aldrig radera produkter eller annat permanent.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="allow-destructive">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ALLA AI-MODELLER ============ -->
+      <section id="view-modeller" class="view">
+        <header class="view-header">
+          <h1>Alla AI-modeller</h1>
+          <p class="view-sub">Alla modeller från dina anslutna leverantörer – samlat på ett ställe.</p>
+        </header>
+        <div class="model-toolbar">
+          <input id="model-search" class="input" type="search" placeholder="Sök modell… (t.ex. gpt, claude, llama)">
+          <button id="reload-models" class="btn btn-ghost">↻ Uppdatera listor</button>
+        </div>
+        <div id="models-list" class="models-list">
+          <div class="skeleton">Hämtar modeller…</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
