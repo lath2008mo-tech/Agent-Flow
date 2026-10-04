@@ -18,7 +18,18 @@ const DEFAULTS = {
   providers: {},          // id -> { apiKey, baseUrl }
   defaultProvider: 'openai',
   defaultModel: '',
-  allowDestructive: false // tillåt t.ex. radera produkter
+  allowDestructive: false, // tillåt t.ex. radera produkter
+  google: {               // "Logga in med Google" (OAuth)
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+    accessToken: '',
+    expiresAt: 0,
+    email: '',
+    name: '',
+    picture: '',
+    scopes: []
+  }
 };
 
 // Env-variabler som fyller på saknade nycklar (skrivs inte tillbaka till filen)
@@ -50,6 +61,7 @@ function load() {
     ...DEFAULTS,
     ...stored,
     shopify: { ...DEFAULTS.shopify, ...(stored.shopify || {}) },
+    google: { ...DEFAULTS.google, ...(stored.google || {}) },
     providers: { ...(stored.providers || {}) }
   };
 
@@ -96,12 +108,28 @@ function update(patch) {
       }
     }
   }
+  if (patch.google && typeof patch.google === 'object') {
+    for (const k of ['clientId', 'clientSecret']) {
+      if (!Object.prototype.hasOwnProperty.call(patch.google, k)) continue;
+      const v = patch.google[k];
+      if (v === null) s.google[k] = '';
+      else if (typeof v === 'string' && v.trim()) s.google[k] = v.trim();
+    }
+  }
   if (typeof patch.allowDestructive === 'boolean') s.allowDestructive = patch.allowDestructive;
   if (typeof patch.defaultProvider === 'string' && patch.defaultProvider) s.defaultProvider = patch.defaultProvider;
   if (typeof patch.defaultModel === 'string') s.defaultModel = patch.defaultModel;
   if (patch.shopify && typeof patch.shopify.apiVersion === 'string' && patch.shopify.apiVersion) {
     s.shopify.apiVersion = patch.shopify.apiVersion.trim();
   }
+  save();
+  return s;
+}
+
+/** Uppdatera Google-tokens/profil (används av OAuth-flödet). */
+function updateGoogle(patch) {
+  const s = load();
+  Object.assign(s.google, patch);
   save();
   return s;
 }
@@ -135,8 +163,17 @@ function publicView() {
     providers,
     defaultProvider: s.defaultProvider,
     defaultModel: s.defaultModel,
-    allowDestructive: s.allowDestructive
+    allowDestructive: s.allowDestructive,
+    google: {
+      configured: Boolean((s.google.clientId || process.env.GOOGLE_CLIENT_ID) && (s.google.clientSecret || process.env.GOOGLE_CLIENT_SECRET)),
+      connected: Boolean(s.google.refreshToken),
+      email: s.google.email,
+      name: s.google.name,
+      picture: s.google.picture,
+      clientIdMasked: maskSecret(s.google.clientId || process.env.GOOGLE_CLIENT_ID || ''),
+      hasClientSecret: Boolean(s.google.clientSecret || process.env.GOOGLE_CLIENT_SECRET)
+    }
   };
 }
 
-module.exports = { load, save, update, publicView, maskSecret };
+module.exports = { load, save, update, updateGoogle, publicView, maskSecret };

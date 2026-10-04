@@ -19,7 +19,7 @@
         </div>
         <div>
           <div class="brand-name">Agent Flow</div>
-          <div class="brand-tag">AI-hubb för din butik</div>
+          <div class="brand-tag">AI som gör allt åt dig</div>
         </div>
       </a>
 
@@ -29,6 +29,9 @@
         </a>
         <a href="#/assistent" data-route="assistent" class="nav-item">
           <span class="nav-icon">✦</span> AI-Assistent
+        </a>
+        <a href="#/botar" data-route="botar" class="nav-item">
+          <span class="nav-icon">🤖</span> Botar
         </a>
         <a href="#/integrationer" data-route="integrationer" class="nav-item">
           <span class="nav-icon">⇄</span> Integrationer
@@ -63,6 +66,14 @@
               <div class="skeleton">Laddar…</div>
             </div>
             <a class="btn btn-ghost btn-sm" href="#/integrationer">Hantera koppling →</a>
+          </div>
+
+          <div class="card" id="card-google">
+            <div class="card-title">🔵 Google</div>
+            <div class="card-body" id="google-status-body">
+              <div class="skeleton">Laddar…</div>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#/integrationer">Logga in med Google →</a>
           </div>
 
           <div class="card">
@@ -133,13 +144,14 @@
         <div class="chat" id="chat">
           <div class="chat-empty" id="chat-empty">
             <div class="chat-empty-icon">✦</div>
-            <h2>Hej! Jag är din AI-assistent.</h2>
-            <p>Jag kan läsa och styra din Shopify-butik. Prova t.ex.:</p>
+            <h2>Hej! Säg vad du vill ha gjort.</h2>
+            <p>Jag sköter butiken, mejlen, kalendern, Sheets/Docs och webben – och bygger botar som jobbar automatiskt.</p>
             <div class="chat-suggestions">
-              <button class="chip" data-prompt="Vilka produkter har sålt bäst den senaste månaden?">Vilka produkter har sålt bäst?</button>
-              <button class="chip" data-prompt="Skapa en produkt med titeln \"Testprodukt\" och pris 199 kr.">Skapa en testprodukt</button>
-              <button class="chip" data-prompt="Sammanfatta dagens ordrar.">Sammanfatta dagens ordrar</button>
-              <button class="chip" data-prompt="Skapa en rabattkod SOMMAR10 med 10% rabatt.">Skapa rabattkod SOMMAR10</button>
+              <button class="chip" data-prompt="Sammanfatta mina olästa mejl och föreslå svar på de viktigaste.">Sammanfatta olästa mejl</button>
+              <button class="chip" data-prompt="Vad har jag i kalendern den här veckan?">Vad har jag i kalendern?</button>
+              <button class="chip" data-prompt="Vilka produkter har sålt bäst den senaste månaden?">Bästsäljare i butiken</button>
+              <button class="chip" data-prompt="Skapa en bot som varje morgon kl 07:30 mejlar mig gårdagens försäljning och dagens möten.">Skapa en morgonrapport-bot</button>
+              <button class="chip" data-prompt="Sök på webben efter de senaste nyheterna om Shopify och sammanfatta.">Sök på webben</button>
             </div>
           </div>
         </div>
@@ -151,7 +163,7 @@
               Skicka <span class="send-icon">➤</span>
             </button>
           </div>
-          <div class="chat-hint" id="chat-hint">AI:n kan hämta och ändra produkter, ordrar, kunder, lager och rabatter i din Shopify-butik.</div>
+          <div class="chat-hint" id="chat-hint">AI:n kan styra Shopify, Gmail, Kalender, Drive, Sheets, Docs, Tasks, söka på webben och skapa botar åt dig.</div>
         </div>
       </section>
 
@@ -161,6 +173,63 @@
           <h1>Integrationer</h1>
           <p class="view-sub">Koppla din butik och dina AI-konton. Allt sparas säkert på servern.</p>
         </header>
+
+        <!-- Google -->
+        <div class="panel" id="google-panel">
+          <div class="panel-head">
+            <h2>🔵 Google – ett klick, alla appar</h2>
+            <span class="badge" id="google-badge">Ej kopplad</span>
+          </div>
+          <p class="panel-desc">Logga in med ditt Google-konto så får AI:n och dina botar tillgång till Gmail, Kalender, Drive, Sheets, Docs, Tasks och Kontakter. Inga API-nycklar behövs.</p>
+
+          <div id="google-connected" class="google-connected" style="display:none">
+            <img id="google-avatar" class="google-avatar" alt="" src="">
+            <div>
+              <div id="google-name" style="font-weight:700"></div>
+              <div id="google-email" style="color:var(--text-dim);font-size:13px"></div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button type="button" id="google-test" class="btn btn-ghost btn-sm">Testa</button>
+              <button type="button" id="google-disconnect" class="btn btn-danger-ghost btn-sm">Logga ut</button>
+            </div>
+          </div>
+
+          <div id="google-login" style="display:none">
+            <a class="btn btn-google" href="/api/google/auth">
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.8 6C12.3 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.4 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.7-4.1-13.6-9.9l-7.8 6C6.5 42.6 14.6 48 24 48z"/></svg>
+              Logga in med Google
+            </a>
+          </div>
+
+          <div class="google-services" id="google-services"></div>
+
+          <details class="howto" id="google-setup">
+            <summary>Första gången: aktivera Google-inloggning (engångsinställning, ~5 min)</summary>
+            <p class="form-hint" style="margin:8px 0 12px">Google kräver att appen registreras en gång. Därefter loggar alla in med ett klick.</p>
+            <ol>
+              <li>Gå till <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com → APIs & Services → Credentials</a> och skapa ett projekt (t.ex. <em>Agent Flow</em>).</li>
+              <li><strong>OAuth consent screen</strong> → External → fyll i namn + din e-post → lägg till dig själv som <em>Test user</em>.</li>
+              <li><strong>Enable APIs</strong>: Gmail API, Google Calendar API, Google Drive API, Google Sheets API, Google Docs API, Tasks API, People API.</li>
+              <li><strong>Create Credentials → OAuth client ID → Web application</strong>. Lägg till denna <em>Authorized redirect URI</em>:<br><code id="google-redirect-uri">…</code></li>
+              <li>Klistra in <strong>Client ID</strong> och <strong>Client Secret</strong> här nedan (eller sätt <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> som miljövariabler).</li>
+            </ol>
+            <form id="google-form" class="form" style="margin-top:12px">
+              <div class="form-row">
+                <label for="google-client-id">Client ID</label>
+                <input id="google-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off">
+              </div>
+              <div class="form-row">
+                <label for="google-client-secret">Client Secret</label>
+                <input id="google-client-secret" type="password" placeholder="GOCSPX-..." autocomplete="off">
+                <div class="form-hint" id="google-secret-hint"></div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Spara</button>
+              </div>
+            </form>
+          </details>
+          <div class="form-result" id="google-result"></div>
+        </div>
 
         <!-- Shopify -->
         <div class="panel">
@@ -217,7 +286,7 @@
           <div class="form-row toggle-row">
             <div>
               <strong>Tillåt raderingar</strong>
-              <div class="form-hint">När avstängt kan AI:n aldrig radera produkter eller annat permanent.</div>
+              <div class="form-hint">När avstängt kan AI:n och botarna aldrig radera produkter, mejl, kalenderhändelser eller annat permanent.</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="allow-destructive">
@@ -225,6 +294,93 @@
             </label>
           </div>
         </div>
+      </section>
+
+      <!-- ============ BOTAR ============ -->
+      <section id="view-botar" class="view">
+        <header class="view-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div>
+            <h1>Botar</h1>
+            <p class="view-sub">Beskriv vad som ska göras – boten gör det, på schema eller när du vill.</p>
+          </div>
+          <button class="btn btn-primary" id="new-bot-btn">+ Ny bot</button>
+        </header>
+
+        <!-- Skapa / redigera -->
+        <div class="panel" id="bot-editor" style="display:none">
+          <div class="panel-head">
+            <h2 id="bot-editor-title">Ny bot</h2>
+            <button type="button" class="btn btn-ghost btn-sm" id="bot-editor-close">Stäng</button>
+          </div>
+
+          <div class="bot-describe">
+            <label for="bot-describe-input">Beskriv med egna ord vad boten ska göra</label>
+            <div class="bot-describe-row">
+              <textarea id="bot-describe-input" rows="2" placeholder="T.ex. Varje morgon kl 7: mejla mig gårdagens försäljning och dagens möten. Eller: Varje timme, kolla nya ordrar över 2000 kr och lägg dem i ett Sheet."></textarea>
+              <button type="button" class="btn btn-primary" id="bot-describe-btn">✦ Låt AI:n fylla i</button>
+            </div>
+            <div class="form-hint" id="bot-describe-msg"></div>
+          </div>
+
+          <form id="bot-form" class="form">
+            <input type="hidden" id="bot-id">
+            <div class="form-grid">
+              <div class="form-row" style="max-width:90px">
+                <label for="bot-emoji">Ikon</label>
+                <input id="bot-emoji" type="text" value="🤖" maxlength="4">
+              </div>
+              <div class="form-row" style="flex:1">
+                <label for="bot-name">Namn</label>
+                <input id="bot-name" type="text" placeholder="Morgonrapport" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="bot-instructions">Instruktion (vad boten ska göra, steg för steg)</label>
+              <textarea id="bot-instructions" rows="6" placeholder="1. Hämta gårdagens ordrar…&#10;2. …&#10;3. Mejla sammanfattningen till mig." required></textarea>
+            </div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label for="bot-schedule-type">Kör</label>
+                <select id="bot-schedule-type" class="input">
+                  <option value="manual">Manuellt (när jag klickar)</option>
+                  <option value="interval">Med intervall</option>
+                  <option value="daily">Varje dag</option>
+                  <option value="weekly">Varje vecka</option>
+                </select>
+              </div>
+              <div class="form-row" id="bot-interval-row" style="display:none">
+                <label for="bot-every">Var … minut</label>
+                <input id="bot-every" type="number" min="5" step="5" value="60">
+              </div>
+              <div class="form-row" id="bot-weekday-row" style="display:none">
+                <label for="bot-weekday">Veckodag</label>
+                <select id="bot-weekday" class="input">
+                  <option value="1">Måndag</option><option value="2">Tisdag</option><option value="3">Onsdag</option>
+                  <option value="4">Torsdag</option><option value="5">Fredag</option><option value="6">Lördag</option><option value="0">Söndag</option>
+                </select>
+              </div>
+              <div class="form-row" id="bot-time-row" style="display:none">
+                <label for="bot-time">Klockan</label>
+                <input id="bot-time" type="time" value="08:00">
+              </div>
+              <div class="form-row">
+                <label for="bot-model">AI-modell</label>
+                <select id="bot-model" class="input"></select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="bot-save-btn">Spara bot</button>
+              <button type="button" class="btn btn-ghost" id="bot-save-run-btn">Spara & kör nu</button>
+            </div>
+          </form>
+          <div class="form-result" id="bot-form-result"></div>
+        </div>
+
+        <div id="bots-list" class="bots-list"><div class="skeleton">Laddar botar…</div></div>
+
+        <h2 class="section-title">Mallar</h2>
+        <p class="view-sub">Klicka för att skapa – ändra sedan som du vill.</p>
+        <div class="flows" id="bot-templates"></div>
       </section>
 
       <!-- ============ ALLA AI-MODELLER ============ -->
