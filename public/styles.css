@@ -389,7 +389,7 @@ body {
 .form { display: flex; flex-direction: column; gap: 14px; }
 .form-row { display: flex; flex-direction: column; gap: 6px; }
 .form-row label { font-size: 12.5px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.2px; }
-.input, .select, .form-row input[type="text"], .form-row input[type="password"], .form-row input[type="url"] {
+.input, .select, .form-row input[type="text"], .form-row input[type="password"], .form-row input[type="url"], .form-row input[type="number"], .form-row input[type="time"], .form-row textarea, .form-row select {
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -991,3 +991,61 @@ body.home { overflow-x: hidden; }
   .mock-float-1 { left: -4px; }
   .mock-float-2 { right: -4px; }
 }
+
+/* ---------- Google ---------- */
+.btn-google {
+  background: #fff; color: #1f1f1f; border: 1px solid #dadce0; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 10px; padding: 11px 18px; border-radius: 10px;
+}
+.btn-google:hover:not(.disabled) { background: #f7f8f8; transform: translateY(-1px); }
+.btn-google.disabled { opacity: 0.6; cursor: not-allowed; }
+.google-connected {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+  background: var(--panel-2); border: 1px solid var(--border); margin-bottom: 14px;
+}
+.google-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.google-services { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 16px 0; }
+.google-service {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel-2); opacity: 0.7;
+}
+.google-service.on { opacity: 1; border-color: rgba(89, 255, 164, 0.3); }
+.google-service-emoji { font-size: 20px; }
+.google-service-name { font-weight: 700; font-size: 13.5px; }
+.google-service-desc { font-size: 11.5px; color: var(--text-faint); }
+
+/* ---------- Botar ---------- */
+.form-grid { display: flex; gap: 14px; flex-wrap: wrap; }
+.form-grid .form-row { min-width: 160px; }
+.bot-describe textarea {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical;
+}
+.bot-describe textarea:focus { outline: none; border-color: var(--purple-soft); }
+.bot-describe { margin-bottom: 18px; padding: 14px; border-radius: 12px; border: 1px dashed var(--purple-soft); background: rgba(138, 5, 255, 0.06); }
+.bot-describe label { font-size: 12.5px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 8px; }
+.bot-describe-row { display: flex; gap: 10px; align-items: stretch; }
+.bot-describe-row textarea { flex: 1; }
+.bots-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 30px; }
+.bots-empty { text-align: center; padding: 40px 20px; }
+.bot-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+.bot-card.paused { opacity: 0.7; }
+.bot-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.bot-emoji { font-size: 28px; line-height: 1; }
+.bot-title { flex: 1; min-width: 200px; }
+.bot-name { font-weight: 750; font-size: 16px; }
+.bot-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.bot-last { font-size: 12px; color: var(--text-faint); }
+.bot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bot-instr { margin-top: 12px; color: var(--text-dim); font-size: 13.5px; white-space: pre-wrap; }
+.bot-runs { margin-top: 12px; }
+.bot-runs summary { cursor: pointer; font-size: 13px; color: var(--text-dim); font-weight: 600; }
+.bot-run { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border-left: 3px solid var(--border); }
+.bot-run.ok { border-left-color: var(--green); }
+.bot-run.error { border-left-color: var(--red); }
+.bot-run-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; }
+.bot-run-meta { color: var(--text-faint); font-weight: 400; }
+.bot-run-out { margin-top: 6px; font-size: 13px; color: var(--text-dim); }
+.bot-run-out p { margin: 4px 0; }
+@media (max-width: 640px) { .bot-describe-row { flex-direction: column; } }
+select option{background:var(--panel)}

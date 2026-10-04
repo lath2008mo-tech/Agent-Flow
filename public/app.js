@@ -100,6 +100,7 @@ function navigate() {
   if (route === 'oversikt') loadOverview();
   if (route === 'modeller') loadModels();
   if (route === 'integrationer') loadIntegrationer();
+  if (route === 'botar') loadBots();
   if (route === 'assistent') {
     renderModelSelect();
     $('#chat-input').focus();
@@ -132,6 +133,17 @@ async function loadOverview() {
     $('#shopify-status-body').innerHTML = '<div>Kunde inte läsa status.</div>';
     setSidebarStatus('warn', 'Kunde inte läsa status');
   }
+
+  // Google
+  try {
+    const g = await api('/api/google/status');
+    $('#google-status-body').innerHTML = g.connected
+      ? `<div><strong>${escapeHtml(g.name || g.email)}</strong></div>
+         <div style="color:var(--text-faint);font-size:12px">${escapeHtml(g.email)}</div>
+         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${g.services.map((x) => `<span class="badge badge-green">${x.emoji} ${escapeHtml(x.name)}</span>`).join('')}</div>`
+      : `<div>Logga in med Google så kan AI:n jobba i Gmail, Kalender, Drive, Sheets, Docs och Tasks.</div>
+         <div style="margin-top:8px"><span class="badge badge-red">Ej kopplad</span></div>`;
+  } catch { /* tyst */ }
 
   // AI-leverantörer
   try {
@@ -188,6 +200,9 @@ async function loadIntegrationer() {
       : '';
     $('#shopify-badge').textContent = s.shopify.hasToken && s.shopify.store ? 'Ansluten' : 'Ej ansluten';
     $('#shopify-badge').className = `badge ${s.shopify.hasToken && s.shopify.store ? 'badge-green' : 'badge-red'}`;
+
+    // Google
+    loadGooglePanel();
 
     // Leverantörsformulär
     renderProviderForms();
@@ -293,6 +308,340 @@ function renderProviderForms() {
     }
   });
 }
+
+
+// ---------- Google ----------
+
+async function loadGooglePanel() {
+  try {
+    const g = await api('/api/google/status');
+    $('#google-redirect-uri').textContent = g.redirectUri;
+    $('#google-badge').textContent = g.connected ? `Kopplad: ${g.email}` : (g.configured ? 'Redo att logga in' : 'Ej konfigurerad');
+    $('#google-badge').className = `badge ${g.connected ? 'badge-green' : ''}`;
+    $('#google-connected').style.display = g.connected ? 'flex' : 'none';
+    $('#google-login').style.display = g.connected ? 'none' : 'block';
+    $('#google-setup').open = !g.configured;
+    if (g.connected) {
+      $('#google-name').textContent = g.name || g.email;
+      $('#google-email').textContent = g.email;
+      const av = $('#google-avatar');
+      if (g.picture) { av.src = g.picture; av.style.display = 'block'; } else av.style.display = 'none';
+    }
+    const loginBtn = $('#google-login .btn-google');
+    if (!g.configured) {
+      loginBtn.classList.add('disabled');
+      loginBtn.title = 'Fyll först i Client ID + Secret nedan';
+      loginBtn.onclick = (e) => { e.preventDefault(); $('#google-setup').open = true; toast('Fyll först i Client ID och Client Secret (engångsinställning).', 'err'); };
+    } else {
+      loginBtn.classList.remove('disabled');
+      loginBtn.onclick = null;
+    }
+    $('#google-client-id').placeholder = g.clientIdMasked || 'xxxx.apps.googleusercontent.com';
+    $('#google-secret-hint').textContent = g.hasClientSecret ? 'Secret är sparad – lämna tomt för att behålla.' : '';
+    $('#google-services').innerHTML = g.services.map((x) => `
+      <div class="google-service ${g.connected ? 'on' : ''}">
+        <span class="google-service-emoji">${x.emoji}</span>
+        <div><div class="google-service-name">${escapeHtml(x.name)}</div><div class="google-service-desc">${escapeHtml(x.desc)}</div></div>
+        <span class="badge ${g.connected ? 'badge-green' : ''}" style="margin-left:auto">${g.connected ? '✓' : '–'}</span>
+      </div>`).join('');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+
+  // Meddelande från OAuth-redirect (?google=ok / ?google_error=)
+  const qs = location.hash.split('?')[1];
+  if (qs) {
+    const p = new URLSearchParams(qs);
+    if (p.get('google') === 'ok') toast(`✓ Google kopplat: ${p.get('email') || ''}`);
+    if (p.get('google_error')) toast(p.get('google_error'), 'err');
+    history.replaceState(null, '', '#/integrationer');
+  }
+}
+
+$('#google-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const result = $('#google-result');
+  result.className = 'form-result';
+  result.textContent = 'Sparar…';
+  try {
+    const patch = { google: {} };
+    const id = $('#google-client-id').value.trim();
+    const secret = $('#google-client-secret').value.trim();
+    if (id) patch.google.clientId = id;
+    if (secret) patch.google.clientSecret = secret;
+    await api('/api/settings', { method: 'PUT', body: patch });
+    $('#google-client-id').value = '';
+    $('#google-client-secret').value = '';
+    result.textContent = '✓ Sparat! Klicka nu på "Logga in med Google".';
+    result.className = 'form-result ok';
+    loadGooglePanel();
+  } catch (err) {
+    result.textContent = err.message;
+    result.className = 'form-result err';
+  }
+});
+
+$('#google-test').addEventListener('click', async () => {
+  const result = $('#google-result');
+  result.className = 'form-result';
+  result.textContent = 'Testar…';
+  try {
+    const r = await api('/api/google/test', { method: 'POST' });
+    result.textContent = r.message;
+    result.className = 'form-result ok';
+  } catch (err) {
+    result.textContent = err.message;
+    result.className = 'form-result err';
+  }
+});
+
+$('#google-disconnect').addEventListener('click', async () => {
+  if (!confirm('Logga ut från Google? AI:n tappar då åtkomst till Gmail, Kalender m.m.')) return;
+  await api('/api/google/disconnect', { method: 'POST' });
+  toast('Google frånkopplat');
+  loadGooglePanel();
+  loadOverview();
+});
+
+// ---------- Botar ----------
+
+const WEEKDAYS = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
+
+function describeSchedule(sch) {
+  if (!sch) return 'Manuellt';
+  if (sch.type === 'interval') return sch.everyMinutes % 60 === 0 ? `Var ${sch.everyMinutes / 60}:e timme` : `Var ${sch.everyMinutes}:e minut`;
+  if (sch.type === 'daily') return `Varje dag kl ${sch.time}`;
+  if (sch.type === 'weekly') return `Varje ${WEEKDAYS[sch.weekday]} kl ${sch.time}`;
+  return 'Manuellt';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '–';
+  const d = new Date(iso);
+  return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function loadBots() {
+  const list = $('#bots-list');
+  try {
+    const data = await api('/api/bots');
+    state.bots = data.bots;
+    renderBotTemplates(data.templates);
+    if (!data.bots.length) {
+      list.innerHTML = `<div class="panel bots-empty">
+        <div style="font-size:34px">🤖</div>
+        <h3>Inga botar ännu</h3>
+        <p class="view-sub">Klicka <strong>+ Ny bot</strong>, välj en mall nedan – eller be AI-assistenten: <em>"Skapa en bot som…"</em></p>
+      </div>`;
+      return;
+    }
+    list.innerHTML = data.bots.map((b) => {
+      const last = b.runs && b.runs[0];
+      return `
+      <div class="bot-card ${b.enabled ? '' : 'paused'}" data-id="${b.id}">
+        <div class="bot-head">
+          <span class="bot-emoji">${escapeHtml(b.emoji || '🤖')}</span>
+          <div class="bot-title">
+            <div class="bot-name">${escapeHtml(b.name)}</div>
+            <div class="bot-meta">
+              <span class="badge ${b.enabled ? 'badge-green' : ''}">${b.running ? '⟳ kör…' : (b.enabled ? '● aktiv' : '◌ pausad')}</span>
+              <span class="badge badge-purple">⏱ ${escapeHtml(describeSchedule(b.schedule))}</span>
+              <span class="bot-last">Senast: ${fmtTime(b.lastRunAt)}${last ? ` · ${last.status === 'ok' ? '✓' : last.status === 'error' ? '✗' : '…'}` : ''}</span>
+            </div>
+          </div>
+          <div class="bot-actions">
+            <button class="btn btn-primary btn-sm bot-run" ${b.running ? 'disabled' : ''}>▶ Kör nu</button>
+            <button class="btn btn-ghost btn-sm bot-toggle">${b.enabled ? 'Pausa' : 'Aktivera'}</button>
+            <button class="btn btn-ghost btn-sm bot-edit">Redigera</button>
+            <button class="btn btn-danger-ghost btn-sm bot-delete">Ta bort</button>
+          </div>
+        </div>
+        <div class="bot-instr">${escapeHtml(b.instructions).slice(0, 400)}${b.instructions.length > 400 ? '…' : ''}</div>
+        ${last ? `
+        <details class="bot-runs">
+          <summary>Körlogg (${b.runs.length})</summary>
+          ${b.runs.map((r) => `
+            <div class="bot-run ${r.status}">
+              <div class="bot-run-head">
+                <span>${r.status === 'ok' ? '✓' : r.status === 'error' ? '✗' : '⟳'} ${fmtTime(r.startedAt)}</span>
+                <span class="bot-run-meta">${escapeHtml(r.trigger || '')}${r.model ? ' · ' + escapeHtml(r.model) : ''}${r.durationMs ? ' · ' + Math.round(r.durationMs / 1000) + 's' : ''}${r.tools && r.tools.length ? ' · verktyg: ' + r.tools.map((t) => escapeHtml(t.name)).join(', ') : ''}</span>
+              </div>
+              <div class="bot-run-out">${r.error ? `<span style="color:var(--red)">${escapeHtml(r.error)}</span>` : renderMarkdown(r.output || '')}</div>
+            </div>`).join('')}
+        </details>` : ''}
+      </div>`;
+    }).join('');
+
+    $$('.bot-card', list).forEach((card) => {
+      const id = card.dataset.id;
+      const bot = state.bots.find((b) => b.id === id);
+      $('.bot-run', card).addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = '⟳ Kör…';
+        toast(`${bot.name} kör – resultatet dyker upp i körloggen.`);
+        try {
+          const r = await api(`/api/bots/${id}/run`, { method: 'POST', body: {} });
+          toast(r.ok ? `✓ ${bot.name} klar` : `✗ ${bot.name}: ${r.run?.error || 'fel'}`, r.ok ? 'ok' : 'err');
+        } catch (err) {
+          toast(err.message, 'err');
+        }
+        loadBots();
+      });
+      $('.bot-toggle', card).addEventListener('click', async () => {
+        await api(`/api/bots/${id}`, { method: 'PUT', body: { enabled: !bot.enabled } });
+        loadBots();
+      });
+      $('.bot-edit', card).addEventListener('click', () => openBotEditor(bot));
+      $('.bot-delete', card).addEventListener('click', async () => {
+        if (!confirm(`Ta bort boten "${bot.name}"?`)) return;
+        await api(`/api/bots/${id}`, { method: 'DELETE' });
+        toast('Bot borttagen');
+        loadBots();
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<div class="skeleton">Kunde inte hämta botar: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderBotTemplates(templates) {
+  const wrap = $('#bot-templates');
+  wrap.innerHTML = (templates || []).map((t, i) => `
+    <button class="flow" data-template="${i}">
+      <span class="flow-icon">${t.emoji}</span>
+      <span class="flow-title">${escapeHtml(t.name)}</span>
+      <span class="flow-desc">${escapeHtml(describeSchedule(t.schedule))} · ${escapeHtml(t.instructions.slice(0, 70))}…</span>
+    </button>`).join('');
+  $$('[data-template]', wrap).forEach((btn) => {
+    btn.addEventListener('click', () => openBotEditor({ ...templates[+btn.dataset.template], id: '' }));
+  });
+}
+
+function syncScheduleFields() {
+  const t = $('#bot-schedule-type').value;
+  $('#bot-interval-row').style.display = t === 'interval' ? '' : 'none';
+  $('#bot-time-row').style.display = t === 'daily' || t === 'weekly' ? '' : 'none';
+  $('#bot-weekday-row').style.display = t === 'weekly' ? '' : 'none';
+}
+$('#bot-schedule-type').addEventListener('change', syncScheduleFields);
+
+async function fillBotModelSelect(providerId, model) {
+  await ensureModelsLoaded();
+  const sel = $('#bot-model');
+  const groups = Object.entries(state.models).filter(([, p]) => p.models.length && p.hasKey);
+  const cur = providerId && model ? `${providerId}::${model}` : `${state.providerId}::${state.model}`;
+  sel.innerHTML = '<option value="">Samma som chatten / standard</option>' + groups.map(([id, p]) => `
+    <optgroup label="${p.emoji} ${escapeHtml(p.name)}">
+      ${p.models.map((m) => `<option value="${id}::${m}" ${`${id}::${m}` === cur ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+    </optgroup>`).join('');
+}
+
+async function openBotEditor(bot = null) {
+  const ed = $('#bot-editor');
+  ed.style.display = 'block';
+  $('#bot-editor-title').textContent = bot && bot.id ? `Redigera: ${bot.name}` : 'Ny bot';
+  $('#bot-id').value = (bot && bot.id) || '';
+  $('#bot-emoji').value = (bot && bot.emoji) || '🤖';
+  $('#bot-name').value = (bot && bot.name) || '';
+  $('#bot-instructions').value = (bot && bot.instructions) || '';
+  const sch = (bot && bot.schedule) || { type: 'manual' };
+  $('#bot-schedule-type').value = sch.type || 'manual';
+  $('#bot-every').value = sch.everyMinutes || 60;
+  $('#bot-time').value = sch.time || '08:00';
+  $('#bot-weekday').value = sch.weekday != null ? sch.weekday : 1;
+  $('#bot-describe-input').value = '';
+  $('#bot-describe-msg').textContent = '';
+  $('#bot-form-result').textContent = '';
+  syncScheduleFields();
+  await fillBotModelSelect(bot && bot.providerId, bot && bot.model);
+  ed.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  (bot && bot.id ? $('#bot-instructions') : $('#bot-describe-input')).focus();
+}
+
+function readBotForm() {
+  const type = $('#bot-schedule-type').value;
+  const mv = $('#bot-model').value;
+  const i = mv.indexOf('::');
+  return {
+    name: $('#bot-name').value.trim(),
+    emoji: $('#bot-emoji').value.trim() || '🤖',
+    instructions: $('#bot-instructions').value.trim(),
+    schedule: {
+      type,
+      everyMinutes: +$('#bot-every').value || 60,
+      time: $('#bot-time').value || '08:00',
+      weekday: +$('#bot-weekday').value
+    },
+    providerId: i > 0 ? mv.slice(0, i) : state.providerId,
+    model: i > 0 ? mv.slice(i + 2) : state.model
+  };
+}
+
+async function saveBot(runAfter) {
+  const result = $('#bot-form-result');
+  const data = readBotForm();
+  if (!data.name || !data.instructions) {
+    result.textContent = 'Fyll i namn och instruktion.';
+    result.className = 'form-result err';
+    return;
+  }
+  result.textContent = 'Sparar…';
+  result.className = 'form-result';
+  try {
+    const id = $('#bot-id').value;
+    const r = id
+      ? await api(`/api/bots/${id}`, { method: 'PUT', body: data })
+      : await api('/api/bots', { method: 'POST', body: data });
+    toast(`✓ Bot sparad: ${r.bot.name}`);
+    $('#bot-editor').style.display = 'none';
+    if (runAfter) {
+      toast(`${r.bot.name} kör nu…`);
+      api(`/api/bots/${r.bot.id}/run`, { method: 'POST', body: {} })
+        .then((x) => { toast(x.ok ? `✓ ${r.bot.name} klar` : `✗ ${x.run?.error || 'fel'}`, x.ok ? 'ok' : 'err'); loadBots(); })
+        .catch((e) => toast(e.message, 'err'));
+    }
+    loadBots();
+  } catch (err) {
+    result.textContent = err.message;
+    result.className = 'form-result err';
+  }
+}
+
+$('#new-bot-btn').addEventListener('click', () => openBotEditor());
+$('#bot-editor-close').addEventListener('click', () => { $('#bot-editor').style.display = 'none'; });
+$('#bot-form').addEventListener('submit', (e) => { e.preventDefault(); saveBot(false); });
+$('#bot-save-run-btn').addEventListener('click', () => saveBot(true));
+
+$('#bot-describe-btn').addEventListener('click', async () => {
+  const desc = $('#bot-describe-input').value.trim();
+  const msg = $('#bot-describe-msg');
+  if (!desc) { msg.textContent = 'Skriv först vad boten ska göra.'; return; }
+  await ensureModelsLoaded();
+  if (!state.model) { msg.textContent = 'Lägg till en AI-nyckel under Integrationer först.'; return; }
+  msg.textContent = '✦ AI:n skriver förslag…';
+  const btn = $('#bot-describe-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/bots/draft', { method: 'POST', body: { description: desc, providerId: state.providerId, model: state.model } });
+    const d = r.draft || {};
+    if (d.name) $('#bot-name').value = d.name;
+    if (d.emoji) $('#bot-emoji').value = d.emoji;
+    if (d.instructions) $('#bot-instructions').value = d.instructions;
+    if (d.schedule && d.schedule.type) {
+      $('#bot-schedule-type').value = d.schedule.type;
+      if (d.schedule.everyMinutes) $('#bot-every').value = d.schedule.everyMinutes;
+      if (d.schedule.time) $('#bot-time').value = String(d.schedule.time).padStart(5, '0');
+      if (d.schedule.weekday != null) $('#bot-weekday').value = d.schedule.weekday;
+      syncScheduleFields();
+    }
+    msg.textContent = '✓ Förslag ifyllt – justera och spara.';
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Shopify-formulär
 $('#shopify-form').addEventListener('submit', async (e) => {
@@ -655,8 +1004,9 @@ $('#clear-chat').addEventListener('click', () => {
       <h2>Chatten är rensad!</h2>
       <p>Vad vill du göra härnäst?</p>
       <div class="chat-suggestions">
-        <button class="chip" data-prompt="Vilka produkter har sålt bäst den senaste månaden?">Vilka produkter har sålt bäst?</button>
-        <button class="chip" data-prompt="Skapa en rabattkod SOMMAR10 med 10% rabatt.">Skapa rabattkod SOMMAR10</button>
+        <button class="chip" data-prompt="Sammanfatta mina olästa mejl.">Sammanfatta olästa mejl</button>
+        <button class="chip" data-prompt="Vad har jag i kalendern idag?">Dagens kalender</button>
+        <button class="chip" data-prompt="Skapa en bot som varje måndag kl 08:00 lägger veckans försäljning i ett Google Sheet.">Skapa en veckorapport-bot</button>
       </div>
     </div>`;
   bindPromptButtons();
@@ -684,7 +1034,7 @@ async function init() {
   try {
     const data = await api('/api/providers');
     state.providers = data.providers;
-    setSidebarStatus('warn', 'Kontrollera Shopify-koppling');
+    setSidebarStatus('warn', 'Kontrollerar kopplingar…');
   } catch {
     setSidebarStatus('warn', 'Servern svarar inte');
   }
