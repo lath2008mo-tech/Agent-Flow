@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "check-storage": "node scripts/check-storage.js",
+    "verify-deploy": "node scripts/verify-deploy.js"
   },
   "engines": {
     "node": ">=20"
