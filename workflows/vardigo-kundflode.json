@@ -1,0 +1,7 @@
+{
+  "name": "Vardigo kundflöde",
+  "emoji": "🐾",
+  "schedule": { "type": "daily", "time": "08:15" },
+  "apps": ["Flow", "Judge.me Reviews", "Messaging", "Promer"],
+  "instructions": "Du kör Vardigo (vardigo.myshopify.com), svensk pälsvård. Gör bara detta:\n1. Hämta ordrar senaste dygnet. Om noll, säg det.\n2. Produkter med lager 0 som är ACTIVE: sätt DRAFT. Rör inte produkter med lager.\n3. Om en order är betald och ofullständigt levererad, skriv ett kort svenskt utkast i Messaging: ordernummer, att spårning kommer via mejl, 14 dagars ångerrätt. Skicka inte om du inte kan skicka säkert.\n4. Påminn om att be om omdöme i Judge.me 7 dagar efter leverans. Skapa inte fejkade recensioner.\n5. Kolla att paketet Pälsvårdspaket hemma och koden MER2 (10 procent vid 2 varor, till 20 oktober 2026) fortfarande finns.\n6. Rapportera kort: ordrar, dolda slutprodukter, utkast. Lova inte försäljning.\nMINNE: spara ordernummer du redan hanterat."
+}
