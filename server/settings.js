@@ -1,13 +1,14 @@
 /**
  * Agent Flow – inställningar
- * Sparas lokalt i data/settings.json (skrivs aldrig till git).
- * API-nycklar kan även läsas från env-variabler (praktiskt på Render).
+ *
+ * Sparas beständigt via store.js: i Supabase (rekommenderat, gratisnivå) när
+ * SUPABASE_URL + nyckel finns i miljön, annars i data/settings.json.
+ * Hemliga fält (Google-tokens, Shopify-token, AI-nycklar) krypteras med
+ * AES-256-GCM när SETTINGS_ENCRYPTION_KEY är satt. API-nycklar kan även läsas
+ * från env-variabler (praktiskt på Render).
  */
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const store = require('./store');
+const setup = require('./setup');
 
 const DEFAULTS = {
   shopify: {
@@ -32,7 +33,7 @@ const DEFAULTS = {
   }
 };
 
-// Env-variabler som fyller på saknade nycklar (skrivs inte tillbaka till filen)
+// Env-variabler som fyller på saknade nycklar (skrivs inte tillbaka till lagringen)
 const ENV_KEYS = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
@@ -45,18 +46,13 @@ const ENV_KEYS = {
   ollama: 'OLLAMA_API_KEY'
 };
 
+store.register('settings', { file: 'settings.json', initial: () => JSON.parse(JSON.stringify(DEFAULTS)) });
+
 let cache = null;
 
 function load() {
   if (cache) return cache;
-  let stored = {};
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      stored = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    }
-  } catch (err) {
-    console.error('[settings] Kunde inte läsa settings.json:', err.message);
-  }
+  const stored = store.read('settings') || {};
   cache = {
     ...DEFAULTS,
     ...stored,
@@ -79,10 +75,7 @@ function load() {
 }
 
 function save() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = SETTINGS_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(cache, null, 2));
-  fs.renameSync(tmp, SETTINGS_FILE);
+  return store.write('settings', cache);
 }
 
 /** Slå ihop en uppdatering med befintliga inställningar. `null`-värden rensar. */
@@ -100,7 +93,10 @@ function update(patch) {
       if (val === null) { delete s.providers[id]; continue; }
       if (Object.prototype.hasOwnProperty.call(val, 'apiKey')) {
         if (val.apiKey === null) { delete s.providers[id].apiKey; delete s.providers[id].fromEnv; }
-        else if (val.apiKey !== '') s.providers[id].apiKey = String(val.apiKey).trim();
+        else if (val.apiKey !== '') {
+          s.providers[id].apiKey = String(val.apiKey).trim();
+          delete s.providers[id].fromEnv; // egen nyckel ersätter env-varianten
+        }
       }
       if (Object.prototype.hasOwnProperty.call(val, 'baseUrl')) {
         if (val.baseUrl === null) delete s.providers[id].baseUrl;
@@ -141,7 +137,11 @@ function maskSecret(secret) {
   return str.slice(0, 3) + '•'.repeat(Math.min(12, str.length - 7)) + str.slice(-4);
 }
 
-/** Inställningar säkra att skicka till frontend (nycklar maskeras). */
+/**
+ * Inställningar säkra att skicka till frontend (nycklar maskeras) plus
+ * driftstatus: var data sparas, om kryptering är på och vad som saknas
+ * innan Google-kontot kan kopplas.
+ */
 function publicView() {
   const s = load();
   const providers = {};
@@ -172,8 +172,14 @@ function publicView() {
       picture: s.google.picture,
       clientIdMasked: maskSecret(s.google.clientId || process.env.GOOGLE_CLIENT_ID || ''),
       hasClientSecret: Boolean(s.google.clientSecret || process.env.GOOGLE_CLIENT_SECRET)
-    }
+    },
+    setup: setup.checklist(s)
   };
 }
 
-module.exports = { load, save, update, updateGoogle, publicView, maskSecret };
+/** Initierar lagringen (lokala filer + extern databas) innan servern startar. */
+async function init() {
+  return store.init();
+}
+
+module.exports = { load, save, update, updateGoogle, publicView, maskSecret, init, DEFAULTS };

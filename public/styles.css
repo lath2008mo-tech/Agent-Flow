@@ -1049,3 +1049,131 @@ body.home { overflow-x: hidden; }
 .bot-run-out p { margin: 4px 0; }
 @media (max-width: 640px) { .bot-describe-row { flex-direction: column; } }
 select option{background:var(--panel)}
+
+/* ============ Driftstatus, varningar och låsskärm ============ */
+
+.muted { color: var(--text-faint); }
+.err-text { color: var(--red); }
+
+.setup-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.07);
+  font-size: 13.5px;
+}
+.setup-banner.fail { border-color: rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.07); }
+.setup-banner .muted { display: block; margin-top: 4px; font-size: 12.5px; }
+.setup-banner .btn { margin-left: auto; flex-shrink: 0; }
+.setup-banner-icon { font-size: 18px; line-height: 1.2; }
+
+.setup-checks { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 16px; }
+.setup-check {
+  display: flex;
+  gap: 11px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.setup-check.ok { border-color: rgba(89, 255, 164, 0.25); }
+.setup-check.warn { border-color: rgba(251, 191, 36, 0.3); }
+.setup-check.fail { border-color: rgba(248, 113, 113, 0.4); }
+.setup-icon {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  font-size: 12px; font-weight: 800;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.setup-check.ok .setup-icon { color: var(--green); background: rgba(89, 255, 164, 0.12); }
+.setup-check.warn .setup-icon { color: var(--amber); background: rgba(251, 191, 36, 0.12); }
+.setup-check.fail .setup-icon { color: var(--red); background: rgba(248, 113, 113, 0.12); }
+.setup-label { font-weight: 650; font-size: 13.5px; }
+.setup-hint { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
+.setup-hint.err { color: var(--red); }
+.setup-storage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  margin-bottom: 14px;
+}
+
+.callout { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); margin: 12px 0; font-size: 13.5px; }
+.callout ul { margin: 8px 0 6px 18px; display: flex; flex-direction: column; gap: 8px; }
+.callout-warn { border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.07); }
+.callout-err { border-color: rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.07); color: var(--red); }
+
+.code-block { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 12px 0; background: var(--bg-soft); }
+.code-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; color: var(--text-dim);
+}
+.code-block pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre;
+}
+
+/* Låsskärm */
+body.locked { overflow: hidden; }
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 8, 12, 0.86);
+  backdrop-filter: blur(6px);
+}
+.lock-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 26px 24px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.lock-logo { display: flex; justify-content: center; margin-bottom: 14px; }
+.lock-card h1 { font-size: 20px; margin-bottom: 8px; }
+.lock-desc { color: var(--text-dim); font-size: 13.5px; margin-bottom: 18px; }
+.lock-card form { display: flex; flex-direction: column; gap: 10px; }
+.lock-card input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+}
+.lock-card input:focus { outline: none; border-color: var(--purple-soft); }
+.lock-msg { margin-top: 12px; font-size: 13px; color: var(--red); min-height: 18px; }
+.lock-hint { margin-top: 6px; font-size: 12px; color: var(--text-faint); }
+.lock-hint code { font-family: var(--mono); color: var(--text-dim); }
+.lock-card .btn-ghost { margin-top: 14px; }
+
+@media (max-width: 760px) {
+  .setup-banner { flex-direction: column; }
+  .setup-banner .btn { margin-left: 0; }
+}

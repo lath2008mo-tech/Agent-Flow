@@ -8,6 +8,9 @@
  */
 const crypto = require('crypto');
 const settings = require('./settings');
+const secure = require('./secure');
+const setup = require('./setup');
+const store = require('./store');
 
 const SCOPES = [
   'openid',
@@ -33,7 +36,8 @@ const SERVICES = [
   { id: 'contacts', name: 'Kontakter', emoji: '👤', desc: 'Slå upp personer' }
 ];
 
-const pendingStates = new Map(); // state -> createdAt
+const pendingStates = new Map(); // state -> createdAt (fallback utan krypteringsnyckel)
+const usedStates = new Map();    // redan använda nonces (skydd mot återupprepning)
 
 function clientConfig(s) {
   const g = s.google || {};
@@ -49,7 +53,27 @@ function isConfigured(s) {
 }
 
 function isConnected(s) {
-  return Boolean(s.google && s.google.refreshToken);
+  const token = s.google && s.google.refreshToken;
+  return Boolean(token) && !secure.isBroken(token);
+}
+
+/** Status för Google-kopplingen, t.ex. om tokens inte går att dekryptera. */
+function tokenHealth(s) {
+  const g = (s && s.google) || {};
+  const broken = ['refreshToken', 'accessToken', 'clientSecret'].filter((k) => secure.isBroken(g[k]));
+  return {
+    stored: Boolean(g.refreshToken),
+    readable: Boolean(g.refreshToken) && !broken.length,
+    brokenFields: broken,
+    error: broken.length
+      ? `Sparade Google-uppgifter kan inte läsas med nuvarande ${secure.KEY_ENV_NAMES[0]}. Sätt tillbaka rätt nyckel i miljön eller koppla Google igen.`
+      : ''
+  };
+}
+
+/** Checklistan med allt som måste vara på plats innan Google kopplas. */
+function requirements(s) {
+  return setup.checklist(s || settings.load());
 }
 
 function redirectUri(req) {
@@ -66,10 +90,21 @@ function authUrl(req) {
     err.status = 400;
     throw err;
   }
-  const state = crypto.randomBytes(16).toString('hex');
-  pendingStates.set(state, Date.now());
-  // Rensa gamla
-  for (const [k, t] of pendingStates) if (Date.now() - t > 10 * 60 * 1000) pendingStates.delete(k);
+  // Allt måste vara på plats innan ett Google-konto kopplas: API-skydd,
+  // beständig extern lagring och krypteringsnyckel (på hostad server).
+  const chk = setup.checklist(s);
+  const blocking = chk.checks.filter((x) => x.blocking);
+  if (blocking.length) {
+    const err = new Error(
+      `Innan Google kan kopplas måste följande vara klart: ${blocking.map((b) => b.label).join(' + ')}. Se "Driftstatus" under Integrationer.`
+    );
+    err.status = 400;
+    err.checks = blocking;
+    throw err;
+  }
+
+  const state = createState();
+  if (state.inMemory) pendingStates.set(state.value, Date.now());
 
   const params = new URLSearchParams({
     client_id: c.clientId,
@@ -79,9 +114,43 @@ function authUrl(req) {
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',
-    state
+    state: state.value
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+/**
+ * OAuth-state. Med en krypteringsnyckel i miljön signeras staten (HMAC) och
+ * klarar därför att gratisservern startar om mitt i inloggningen. Utan nyckel
+ * används den gamla minnesbaserade varianten.
+ */
+function createState() {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const ts = Date.now();
+  const payload = `${nonce}.${ts}`;
+  const sig = secure.sign(payload);
+  if (!sig) return { value: nonce, inMemory: true };
+  return { value: `${payload}.${sig}`, inMemory: false };
+}
+
+function verifyState(state) {
+  if (!state) return false;
+  if (pendingStates.has(state)) {
+    pendingStates.delete(state);
+    return true;
+  }
+  if (!secure.enabled()) return false;
+  const parts = String(state).split('.');
+  if (parts.length !== 3) return false;
+  const [nonce, ts, sig] = parts;
+  if (!secure.verify(`${nonce}.${ts}`, sig)) return false;
+  const age = Date.now() - Number(ts);
+  if (!Number.isFinite(age) || age < 0 || age > 10 * 60 * 1000) return false;
+  // Engångsbruk: samma state får bara användas en gång medan servern lever.
+  if (usedStates.has(nonce)) return false;
+  usedStates.set(nonce, Date.now());
+  for (const [k, t] of usedStates) if (Date.now() - t > 10 * 60 * 1000) usedStates.delete(k);
+  return true;
 }
 
 async function tokenRequest(params) {
@@ -103,10 +172,19 @@ async function tokenRequest(params) {
 async function handleCallback(req) {
   const { code, state, error } = req.query;
   if (error) throw new Error(`Google nekade inloggningen: ${error}`);
-  if (!state || !pendingStates.has(state)) throw new Error('Ogiltig eller utgången inloggningsstatus. Försök igen.');
-  pendingStates.delete(state);
+  if (!verifyState(state)) throw new Error('Ogiltig eller utgången inloggningsstatus. Försök igen.');
+  // Rensa gamla minnesbaserade states
+  for (const [k, t] of pendingStates) if (Date.now() - t > 10 * 60 * 1000) pendingStates.delete(k);
 
   const s = settings.load();
+  const chk = setup.checklist(s);
+  if (!chk.canConnectGoogle) {
+    const err = new Error(
+      `Google nekades kopplas: ${chk.checks.filter((x) => x.blocking).map((b) => b.label).join(' + ')} saknas. Se "Driftstatus" under Integrationer.`
+    );
+    err.status = 400;
+    throw err;
+  }
   const c = clientConfig(s);
   const tok = await tokenRequest({
     code,
@@ -134,6 +212,7 @@ async function handleCallback(req) {
     name: profile.name || '',
     picture: profile.picture || ''
   });
+  profile.storage = store.status().mode;
   return profile;
 }
 
@@ -142,6 +221,11 @@ async function getAccessToken() {
   const g = s.google || {};
   if (!g.refreshToken) {
     const err = new Error('Google är inte kopplat. Be användaren klicka "Logga in med Google" under Integrationer.');
+    err.status = 400;
+    throw err;
+  }
+  if (secure.isBroken(g.refreshToken)) {
+    const err = new Error(tokenHealth(s).error);
     err.status = 400;
     throw err;
   }
@@ -787,6 +871,7 @@ const TOOLS = [
 function status() {
   const s = settings.load();
   const g = s.google || {};
+  const chk = setup.checklist(s);
   return {
     configured: isConfigured(s),
     connected: isConnected(s),
@@ -795,8 +880,29 @@ function status() {
     picture: g.picture || '',
     services: SERVICES,
     clientIdMasked: settings.maskSecret(clientConfig(s).clientId),
-    hasClientSecret: Boolean(clientConfig(s).clientSecret)
+    hasClientSecret: Boolean(clientConfig(s).clientSecret),
+    // Driftläge: var sparas tokens, är de krypterade och får Google kopplas?
+    canConnect: chk.canConnectGoogle,
+    missing: chk.checks.filter((c) => !c.ok).map((c) => ({ id: c.id, label: c.label, hint: c.hint, status: c.status, blocking: c.blocking })),
+    tokenHealth: tokenHealth(s),
+    storage: { mode: chk.storage.mode, remote: chk.storage.remote, encrypted: chk.storage.encrypted, error: chk.storage.error },
+    authRequired: chk.auth.required
   };
 }
 
-module.exports = { TOOLS, SERVICES, SCOPES, authUrl, handleCallback, disconnect, status, isConnected, isConfigured, redirectUri, gapi };
+module.exports = {
+  TOOLS,
+  SERVICES,
+  SCOPES,
+  authUrl,
+  handleCallback,
+  disconnect,
+  status,
+  isConnected,
+  isConfigured,
+  redirectUri,
+  gapi,
+  requirements,
+  tokenHealth,
+  canConnect: (s) => setup.checklist(s || settings.load()).canConnectGoogle
+};

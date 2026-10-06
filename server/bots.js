@@ -5,16 +5,17 @@
  *
  * Scheman: manual | interval (var N:e minut) | daily (kl HH:MM) | weekly (veckodag + HH:MM)
  */
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const settings = require('./settings');
 const providers = require('./providers');
+const store = require('./store');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const BOTS_FILE = path.join(DATA_DIR, 'bots.json');
 const TZ = 'Europe/Stockholm';
 const MAX_RUNS_KEPT = 30;
+
+// Botarna sparas beständigt via store (Supabase eller lokal fil) så att de
+// överlever att gratisinsatsen på Render startar om.
+store.register('bots', { file: 'bots.json', initial: [] });
 
 let bots = null;
 const running = new Set();
@@ -22,21 +23,15 @@ const running = new Set();
 // ---------- Lagring ----------
 
 function load() {
-  if (bots) return bots;
-  try {
-    bots = fs.existsSync(BOTS_FILE) ? JSON.parse(fs.readFileSync(BOTS_FILE, 'utf8')) : [];
-  } catch (err) {
-    console.error('[bots] Kunde inte läsa bots.json:', err.message);
-    bots = [];
+  if (!bots) {
+    const stored = store.read('bots');
+    bots = Array.isArray(stored) ? stored : [];
   }
   return bots;
 }
 
 function save() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = BOTS_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(bots, null, 2));
-  fs.renameSync(tmp, BOTS_FILE);
+  store.write('bots', load());
 }
 
 function list() {
