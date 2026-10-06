@@ -15,7 +15,8 @@ const MAX_RUNS_KEPT = 30;
 
 // Botarna sparas beständigt via store (Supabase eller lokal fil) så att de
 // överlever att gratisinsatsen på Render startar om.
-store.register('bots', { file: 'bots.json', initial: [] });
+// Botarna innehåller inga hemligheter (instruktioner, schema och körloggar).
+store.register('bots', { file: 'bots.json', initial: [], secrets: [] });
 
 let bots = null;
 const running = new Set();

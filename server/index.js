@@ -38,6 +38,7 @@ const MAX_HISTORY = 30;
 /** Publik driftstatus: var data sparas, om kryptering/API-skydd är på. */
 function publicSetup() {
   const chk = setup.checklist(settings.load());
+  const g = google.status();
   return {
     ok: chk.ok,
     hosted: chk.hosted,
@@ -54,6 +55,13 @@ function publicSetup() {
       storageUrl: chk.storage.envVars.url,
       storageKey: chk.storage.envVars.key,
       encryption: chk.encryption.keyVar
+    },
+    // Gör det möjligt att verifiera att Google-inloggningen överlevde en
+    // omstart: connectedAt är samma tidsstämpel som före omstarten.
+    google: {
+      connected: g.connected,
+      connectedAt: g.connectedAt || '',
+      tokenReadable: g.tokenHealth ? g.tokenHealth.readable : false
     }
   };
 }

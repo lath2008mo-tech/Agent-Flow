@@ -65,10 +65,19 @@ function initialValue(name) {
   return JSON.parse(JSON.stringify(v ?? null));
 }
 
-/** Registrera ett dokument som ska kunna sparas/läsas beständigt. */
-function register(name, { file, initial }) {
-  registry.set(name, { file, initial });
+/**
+ * Registrera ett dokument som ska kunna sparas/läsas beständigt.
+ * `secrets` listar fält som ska krypteras innan de skrivs (punkt-sökvägar,
+ * `*` matchar alla nycklar) – utan den listan sparas dokumentet i klartext.
+ */
+function register(name, { file, initial, secrets }) {
+  registry.set(name, { file, initial, secrets: secrets || secure.SECRET_PATHS[name] || [] });
   return name;
+}
+
+function secretsFor(name) {
+  const reg = registry.get(name);
+  return reg && reg.secrets ? reg.secrets : (secure.SECRET_PATHS[name] || []);
 }
 
 function localFile(name) {
@@ -95,7 +104,7 @@ function writeLocal(name, value) {
   try {
     const dir = path.dirname(file);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const protectedValue = secure.protectDoc(name, value);
+    const protectedValue = secure.protectDoc(name, value, secretsFor(name));
     const tmp = `${file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(protectedValue, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, file);
@@ -153,7 +162,7 @@ async function pullRemote(name) {
   }
   const row = Array.isArray(rows) ? rows[0] : rows;
   if (!row) return null;
-  const { value, errors } = secure.unprotectDoc(name, row.payload);
+  const { value, errors } = secure.unprotectDoc(name, row.payload, secretsFor(name));
   if (errors.length) {
     secure.setLastError(errors.join(' '));
     console.error(`[store] ${name}:`, errors.join(' '));
@@ -164,7 +173,7 @@ async function pullRemote(name) {
 async function pushRemote(name) {
   const { url, table } = remoteConfig();
   const value = docs.get(name);
-  const body = [{ id: name, payload: secure.protectDoc(name, value), updated_at: new Date().toISOString() }];
+  const body = [{ id: name, payload: secure.protectDoc(name, value, secretsFor(name)), updated_at: new Date().toISOString() }];
   const rows = await rest(`${url}/rest/v1/${table}?on_conflict=id`, {
     method: 'POST',
     headers: headers({ Prefer: 'resolution=merge-duplicates,return=representation' }),
@@ -220,7 +229,7 @@ function read(name) {
   const local = readLocal(name);
   let value = initialValue(name);
   if (local !== null && local !== undefined) {
-    const { value: unprotected, errors } = secure.unprotectDoc(name, local);
+    const { value: unprotected, errors } = secure.unprotectDoc(name, local, secretsFor(name));
     value = unprotected;
     m.source = 'file';
     if (errors.length) {
@@ -353,6 +362,7 @@ module.exports = {
   read,
   write,
   refresh,
+  flush,
   flushAll,
   remoteEnabled,
   remoteConfig,

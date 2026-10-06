@@ -142,6 +142,50 @@ Assistenten kan bl.a.:
 - `create_discount`, `list_discounts`
 - `shop_stats`, `get_shop_info`
 
+## 🧪 Tester
+
+```bash
+npm install
+npm test
+```
+
+Testerna (`test/`) körs med Nodes inbyggda testkörare – inga extra beroenden. De
+täcker bl.a. krypteringen (inkl. fel nyckel och manipulerad data), lagringen mot en
+fejkad Supabase, API-skyddet, Google-flödet och att **Google-inloggningen finns kvar
+efter en omstart** (startar servern som en egen process med tom lokal disk).
+Kör även automatiskt i GitHub Actions (`.github/workflows/test.yml`) på Node 20 och 22.
+
+## 🔎 Kontrollera deployen
+
+`/api/health` är publik och svarar utan nyckel med driftstatus (inga hemligheter):
+
+```bash
+curl -s https://DIN-APP.onrender.com/api/health | python3 -m json.tool
+```
+
+```json
+{
+  "ok": true,
+  "setup": {
+    "ok": true,
+    "hosted": true,
+    "authRequired": true,
+    "storage": { "mode": "supabase", "remote": true, "encrypted": true, "error": "" },
+    "missing": [],
+    "google": { "connected": true, "connectedAt": "2026-10-06T07:12:03.501Z", "tokenReadable": true }
+  }
+}
+```
+
+Kontrollera efter en omstart (**Manual Deploy → Restart**):
+
+- `google.connected` = `true` och `google.tokenReadable` = `true`
+- `google.connectedAt` är **samma tidsstämpel** som före omstarten
+  (en ny tidsstämpel skulle betyda att kopplingen tappades och gjordes om)
+- `storage.mode` = `supabase` och `storage.encrypted` = `true`
+
+Saknas något visas det i `missing` och i appens **Driftstatus**-panel.
+
 ## ⚙️ Teknik
 
 - **Backend:** Node.js + Express, inga tunga beroenden.

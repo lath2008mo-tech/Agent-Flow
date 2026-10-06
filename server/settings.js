@@ -29,7 +29,8 @@ const DEFAULTS = {
     email: '',
     name: '',
     picture: '',
-    scopes: []
+    scopes: [],
+    connectedAt: ''       // när inloggningen kopplades – ändras inte vid omstart
   }
 };
 
@@ -46,7 +47,20 @@ const ENV_KEYS = {
   ollama: 'OLLAMA_API_KEY'
 };
 
-store.register('settings', { file: 'settings.json', initial: () => JSON.parse(JSON.stringify(DEFAULTS)) });
+// Fälten nedan krypteras (AES-256-GCM) innan de lämnar servern.
+const SECRET_FIELDS = [
+  'shopify.token',
+  'google.clientSecret',
+  'google.refreshToken',
+  'google.accessToken',
+  'providers.*.apiKey'
+];
+
+store.register('settings', {
+  file: 'settings.json',
+  initial: () => JSON.parse(JSON.stringify(DEFAULTS)),
+  secrets: SECRET_FIELDS
+});
 
 let cache = null;
 
@@ -122,10 +136,19 @@ function update(patch) {
   return s;
 }
 
-/** Uppdatera Google-tokens/profil (används av OAuth-flödet). */
+/**
+ * Uppdatera Google-tokens/profil (används av OAuth-flödet).
+ * connectedAt sätts när en ny inloggning sparas och nollställs vid utloggning –
+ * då kan man se att en koppling överlevde en omstart (tidsstämpeln är kvar).
+ */
 function updateGoogle(patch) {
   const s = load();
+  const previous = s.google.refreshToken || '';
   Object.assign(s.google, patch);
+  const next = s.google.refreshToken || '';
+  if (next !== previous) {
+    s.google.connectedAt = next ? new Date().toISOString() : '';
+  }
   save();
   return s;
 }

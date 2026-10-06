@@ -18,7 +18,7 @@ const PREFIX = 'enc:v1:';
 const KEY_ENV_NAMES = ['SETTINGS_ENCRYPTION_KEY', 'AGENT_FLOW_ENCRYPTION_KEY', 'ENCRYPTION_KEY'];
 const SALT = 'agent-flow/secret-store/v1';
 
-/** Fält som alltid krypteras, per dokument. `*` matchar alla nycklar. */
+/** Standardfält som alltid krypteras, per dokument. `*` matchar alla nycklar. */
 const SECRET_PATHS = {
   settings: [
     'shopify.token',
@@ -26,8 +26,7 @@ const SECRET_PATHS = {
     'google.refreshToken',
     'google.accessToken',
     'providers.*.apiKey'
-  ],
-  bots: []
+  ]
 };
 
 let cache = { raw: '', key: null, id: '' };
@@ -144,12 +143,15 @@ function deepClone(value) {
   return value === undefined ? value : JSON.parse(JSON.stringify(value));
 }
 
-/** Kopia av dokumentet där alla hemliga fält är krypterade. */
-function protectDoc(name, doc) {
-  const paths = SECRET_PATHS[name] || [];
-  if (!paths.length || !enabled()) return doc;
+/**
+ * Kopia av dokumentet där alla hemliga fält är krypterade.
+ * `paths` kommer från dokumentets registrering i store (annars SECRET_PATHS).
+ */
+function protectDoc(name, doc, paths) {
+  const fields = paths || SECRET_PATHS[name] || [];
+  if (!fields.length || !enabled()) return doc;
   const clone = deepClone(doc);
-  for (const path of paths) {
+  for (const path of fields) {
     for (const [obj, key] of targets(clone, path)) {
       if (typeof obj[key] === 'string' && obj[key]) obj[key] = encrypt(obj[key]);
     }
@@ -162,12 +164,12 @@ function protectDoc(name, doc) {
  * Går ett fält inte att dekryptera behålls det krypterade värdet (så att en
  * sparad kopia inte förstörs) och felet rapporteras i stället.
  */
-function unprotectDoc(name, doc) {
-  const paths = SECRET_PATHS[name] || [];
+function unprotectDoc(name, doc, paths) {
+  const fields = paths || SECRET_PATHS[name] || [];
   const clone = deepClone(doc);
   const errors = [];
-  if (!paths.length) return { value: clone, errors };
-  for (const path of paths) {
+  if (!fields.length) return { value: clone, errors };
+  for (const path of fields) {
     for (const [obj, key] of targets(clone, path)) {
       const value = obj[key];
       if (!isEncrypted(value)) continue;

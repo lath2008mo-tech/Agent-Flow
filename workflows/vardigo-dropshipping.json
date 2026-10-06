@@ -1,0 +1,6 @@
+{
+  "name": "Vardigo dropshipping",
+  "emoji": "📦",
+  "schedule": { "type": "daily", "time": "08:30" },
+  "instructions": "Samma jobb som Grok-boten Vardigo dropshipping. Lista aktiva produkter. Dölj sådana med lager 0 om leverantör inte är kopplad. Lägg max en ny djurprodukt om den saknas och löser tass, päls, matning eller mörker. Pris minst dubbla inööp. Svensk text, 14 dagars ångerrätt, 7–15 arbetsdagar. Tagga supplier-connection-required. Inga fejkade recensioner. Rapportera kort."
+}

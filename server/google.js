@@ -212,6 +212,15 @@ async function handleCallback(req) {
     name: profile.name || '',
     picture: profile.picture || ''
   });
+
+  // Skriv klart till databasen direkt (inte via den fördröjda kön) så att
+  // inloggningen garanterat finns kvar även om instansen startar om direkt.
+  try {
+    await store.flush('settings');
+  } catch (err) {
+    console.error('[google] Kunde inte skriva inloggningen till databasen direkt:', err.message);
+  }
+
   profile.storage = store.status().mode;
   return profile;
 }
@@ -881,6 +890,7 @@ function status() {
     services: SERVICES,
     clientIdMasked: settings.maskSecret(clientConfig(s).clientId),
     hasClientSecret: Boolean(clientConfig(s).clientSecret),
+    connectedAt: g.connectedAt || '',
     // Driftläge: var sparas tokens, är de krypterade och får Google kopplas?
     canConnect: chk.canConnectGoogle,
     missing: chk.checks.filter((c) => !c.ok).map((c) => ({ id: c.id, label: c.label, hint: c.hint, status: c.status, blocking: c.blocking })),
