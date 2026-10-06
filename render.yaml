@@ -26,3 +26,14 @@ services:
       #   sync: false
       # - key: GOOGLE_CLIENT_SECRET
       #   sync: false
+      # --- Beständig lagring + säkerhet (krävs på gratisplanen, se README) ---
+      # - key: SUPABASE_URL               # https://DITT-PROJEKT.supabase.co
+      #   sync: false
+      # - key: SUPABASE_SERVICE_ROLE_KEY  # service_role-nyckeln (hemlig, server-only)
+      #   sync: false
+      # - key: SETTINGS_ENCRYPTION_KEY    # minst 32 slumpade tecken, AES-256-GCM
+      #   sync: false
+      # - key: APP_API_KEY                # åtkomstnyckeln till appens API/UI
+      #   sync: false
+      # - key: SUPABASE_TABLE             # valfritt, standard: agent_flow_store
+      #   value: agent_flow_store

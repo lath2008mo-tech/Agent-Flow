@@ -11,11 +11,19 @@ const shopify = require('./shopify');
 const google = require('./google');
 const bots = require('./bots');
 const agent = require('./agent');
+const store = require('./store');
+const auth = require('./auth');
+const setup = require('./setup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '2mb' }));
+
+// API-skydd: kräver APP_API_KEY i headern när nyckeln finns i miljön.
+// (Publikt: /api/health, /api/auth/status och Googles OAuth-callback.)
+app.use(auth.middleware());
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Appen ligger på /app, hemsidan på /
@@ -27,8 +35,49 @@ const MAX_HISTORY = 30;
 
 // ---------- Inställningar ----------
 
+/** Publik driftstatus: var data sparas, om kryptering/API-skydd är på. */
+function publicSetup() {
+  const chk = setup.checklist(settings.load());
+  const g = google.status();
+  return {
+    ok: chk.ok,
+    hosted: chk.hosted,
+    authRequired: chk.auth.required,
+    storage: {
+      mode: chk.storage.mode,
+      remote: chk.storage.remote,
+      encrypted: chk.storage.encrypted,
+      error: chk.storage.error
+    },
+    missing: chk.checks.filter((c) => !c.ok).map((c) => c.id),
+    envVars: {
+      auth: chk.auth.keyVar,
+      storageUrl: chk.storage.envVars.url,
+      storageKey: chk.storage.envVars.key,
+      encryption: chk.encryption.keyVar
+    },
+    // Gör det möjligt att verifiera att Google-inloggningen överlevde en
+    // omstart: connectedAt är samma tidsstämpel som före omstarten.
+    google: {
+      connected: g.connected,
+      connectedAt: g.connectedAt || '',
+      tokenReadable: g.tokenHealth ? g.tokenHealth.readable : false
+    }
+  };
+}
+
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, app: 'Agent Flow', time: new Date().toISOString() });
+  res.json({ ok: true, app: 'Agent Flow', time: new Date().toISOString(), setup: publicSetup() });
+});
+
+// Publik: används av inlåsningsskärmen innan nyckeln är känd.
+app.get('/api/auth/status', (req, res) => {
+  res.json(auth.publicStatus(req));
+});
+
+// Full checklista för driftstatus (kräver nyckel när API:t är skyddat).
+app.get('/api/setup', (req, res) => {
+  res.json(setup.checklist(settings.load()));
 });
 
 app.get('/api/settings', (req, res) => {
@@ -152,6 +201,22 @@ app.get('/api/google/status', (req, res) => {
   res.json({ ...google.status(), redirectUri: google.redirectUri(req) });
 });
 
+/**
+ * Frontend hämtar inloggnings-URL:en här (med API-nyckeln i headern) och
+ * navigerar sedan till Google. Nyckeln hamnar då aldrig i en URL.
+ */
+app.post('/api/google/auth-url', (req, res) => {
+  try {
+    res.json({ ok: true, url: google.authUrl(req) });
+  } catch (err) {
+    res.status(err.status && err.status < 500 ? err.status : 400).json({
+      ok: false,
+      error: err.message,
+      checks: err.checks || []
+    });
+  }
+});
+
 app.get('/api/google/auth', (req, res) => {
   try {
     res.redirect(google.authUrl(req));
@@ -163,7 +228,9 @@ app.get('/api/google/auth', (req, res) => {
 app.get('/api/google/callback', async (req, res) => {
   try {
     const profile = await google.handleCallback(req);
-    res.redirect(`/app#/integrationer?google=ok&email=${encodeURIComponent(profile.email || '')}`);
+    const params = new URLSearchParams({ google: 'ok', email: profile.email || '' });
+    if (profile.storage) params.set('storage', profile.storage);
+    res.redirect(`/app#/integrationer?${params}`);
   } catch (err) {
     res.redirect(`/app#/integrationer?google_error=${encodeURIComponent(err.message)}`);
   }
@@ -315,7 +382,42 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Agent Flow körs på http://0.0.0.0:${PORT}`);
-  bots.startScheduler();
+async function start() {
+  // Läs in sparad data (Supabase eller lokal fil) innan servern tar emot trafik.
+  const storage = await settings.init();
+  console.log(`[store] Lagring: ${storage.remote ? 'Supabase' : (storage.configured ? 'Supabase (fel – använder lokal fil)' : 'lokal fil')} · kryptering: ${storage.encrypted ? 'på' : 'AV'}`);
+  if (storage.error) console.warn('[store] Varning:', storage.error);
+  if (!storage.encrypted) {
+    console.warn('[store] Tips: sätt SETTINGS_ENCRYPTION_KEY för att kryptera tokens (krävs på Render innan Google kopplas).');
+  }
+  if (!auth.required()) {
+    console.warn('[store] Tips: sätt APP_API_KEY för att skydda API:t (krävs på Render innan Google kopplas).');
+  }
+  if (storage.mode !== 'supabase' && setup.checklist(settings.load()).hosted) {
+    console.warn('[store] Tips: sätt SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY så överlever inloggningen en omstart.');
+  }
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Agent Flow körs på http://0.0.0.0:${PORT}`);
+    bots.startScheduler();
+  });
+
+  // Skriv klart till databasen innan processen avslutas (Render skickar SIGTERM).
+  let closing = false;
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.on(sig, async () => {
+      if (closing) return;
+      closing = true;
+      try {
+        await store.flushAll();
+      } catch { /* ignorera */ }
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 3000).unref();
+    });
+  }
+}
+
+start().catch((err) => {
+  console.error('[server] Kunde inte starta:', err.message);
+  process.exit(1);
 });

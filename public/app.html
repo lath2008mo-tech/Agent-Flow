@@ -45,13 +45,16 @@
         <div class="status-pill" id="sidebar-status">
           <span class="dot"></span> Kontrollerar…
         </div>
-        <div class="sidebar-note">Nycklar sparas endast på din server.</div>
+        <div class="sidebar-note">Nycklar sparas krypterade på din server.</div>
         <a class="sidebar-note" href="/" style="text-decoration:none">← Till hemsidan</a>
       </div>
     </aside>
 
     <!-- Innehåll -->
     <main class="main">
+      <!-- Driftstatus-varning (visas när något behöver åtgärdas) -->
+      <div id="setup-banner" class="setup-banner" hidden></div>
+
       <!-- ============ ÖVERSIKT ============ -->
       <section id="view-oversikt" class="view">
         <header class="view-header">
@@ -195,11 +198,13 @@
           </div>
 
           <div id="google-login" style="display:none">
-            <a class="btn btn-google" href="/api/google/auth">
+            <button type="button" class="btn btn-google" id="google-login-btn">
               <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.8 6C12.3 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.4 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.7-4.1-13.6-9.9l-7.8 6C6.5 42.6 14.6 48 24 48z"/></svg>
               Logga in med Google
-            </a>
+            </button>
           </div>
+
+          <div id="google-blockers" hidden></div>
 
           <div class="google-services" id="google-services"></div>
 
@@ -229,6 +234,45 @@
             </form>
           </details>
           <div class="form-result" id="google-result"></div>
+        </div>
+
+        <!-- Driftstatus: lagring, kryptering, API-skydd -->
+        <div class="panel" id="driftstatus-panel">
+          <div class="panel-head">
+            <h2>🔐 Driftstatus – var sparas inloggningen?</h2>
+            <span class="badge" id="setup-badge">Kontrollerar…</span>
+          </div>
+          <p class="panel-desc">
+            Google-inloggningen (och Shopify-nycklar, botar och körloggar) måste sparas utanför serverns disk –
+            annars försvinner de när Render Free startar om. Här ser du exakt vad som är på plats.
+          </p>
+          <div class="setup-checks" id="setup-checks"><div class="skeleton">Laddar…</div></div>
+          <div class="setup-storage" id="setup-storage"></div>
+
+          <details class="howto">
+            <summary>Så här kopplar du en gratis Supabase-databas (engångsinställning, ~5 min)</summary>
+            <ol>
+              <li>Skapa ett konto på <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a> och ett nytt projekt (gratisnivån räcker – inga betalkort behövs).</li>
+              <li>Öppna <strong>SQL Editor</strong> → klistra in SQL:en nedan → <strong>Run</strong>.</li>
+              <li>Gå till <strong>Settings → API</strong> och kopiera <strong>Project URL</strong> samt <strong>service_role</strong>-nyckeln (den hemliga – aldrig i webbläsaren).</li>
+              <li>I <a href="https://dashboard.render.com" target="_blank" rel="noopener">Render</a> → din tjänst → <strong>Environment</strong>: lägg in variablerna nedan och spara (tjänsten startar om automatiskt).</li>
+              <li>Ladda om den här sidan – panelen ska visa <em>Allt klart</em>. Klicka sedan på <strong>Logga in med Google</strong>.</li>
+            </ol>
+            <div class="code-block">
+              <div class="code-head"><span>Render → Environment</span></div>
+              <pre id="setup-envvars"></pre>
+            </div>
+            <div class="code-block">
+              <div class="code-head"><span>Supabase → SQL Editor</span><button type="button" class="btn btn-ghost btn-sm" id="setup-copy-sql">Kopiera</button></div>
+              <pre id="setup-sql"></pre>
+            </div>
+            <p class="form-hint" id="setup-sql-hint"></p>
+            <p class="form-hint">
+              Ändra aldrig krypteringsnyckeln efter att Google kopplats – då kan de sparade tokens inte läsas igen
+              (koppla i så fall Google på nytt). Nycklarna lämnar aldrig servern och visas aldrig i chatten.
+            </p>
+          </details>
+          <div class="form-result" id="setup-result"></div>
         </div>
 
         <!-- Shopify -->
@@ -398,6 +442,24 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Låsskärm: visas när API:t kräver en åtkomstnyckel (APP_API_KEY) -->
+  <div class="lock-overlay" id="lock-screen" hidden>
+    <div class="lock-card">
+      <div class="lock-logo">
+        <svg viewBox="0 0 100 100" width="40" height="40"><rect width="100" height="100" rx="22" fill="#8A05FF"/><path d="M28 38h44M28 52h44M28 66h22" stroke="#59FFA4" stroke-width="9" stroke-linecap="round"/></svg>
+      </div>
+      <h1>Agent Flow är låst</h1>
+      <p class="lock-desc">Ange åtkomstnyckeln som du satt i serverns miljövariabler. Nyckeln sparas bara i din webbläsare.</p>
+      <form id="lock-form">
+        <input id="lock-key" type="password" placeholder="Åtkomstnyckel (APP_API_KEY)" autocomplete="current-password" autofocus>
+        <button type="submit" class="btn btn-primary">Lås upp</button>
+      </form>
+      <div class="lock-msg" id="lock-msg"></div>
+      <div class="lock-hint" id="lock-hint"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="lock-logout">Rensa sparad nyckel</button>
+    </div>
   </div>
 
   <div id="toast" class="toast"></div>

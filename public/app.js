@@ -4,8 +4,11 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+const API_KEY_STORAGE = 'af_api_key';
+
 const state = {
   settings: null,
+  setup: null,
   providers: [],
   models: {},          // providerId -> [modeller]
   messages: [],        // chatt-historik {role, content}
@@ -13,6 +16,29 @@ const state = {
   providerId: localStorage.getItem('af_provider') || 'openai',
   model: localStorage.getItem('af_model') || ''
 };
+
+// ---------- API-nyckel (APP_API_KEY) ----------
+
+function apiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || '';
+}
+
+function setApiKey(key) {
+  if (key) localStorage.setItem(API_KEY_STORAGE, key);
+  else localStorage.removeItem(API_KEY_STORAGE);
+}
+
+function authHeaders(extra = {}) {
+  const key = apiKey();
+  return key ? { 'x-api-key': key, ...extra } : { ...extra };
+}
+
+class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
 
 // ---------- Hjälp ----------
 
@@ -77,15 +103,75 @@ function renderMarkdown(text) {
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(options.headers || {})
+    },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    lockApp(data.error || 'API:t kräver en åtkomstnyckel.');
+    throw new ApiError(data.error || 'API:t kräver en åtkomstnyckel (APP_API_KEY).', 401);
+  }
   if (!res.ok && !data.ok) {
-    throw new Error(data.error || data.message || `Fel ${res.status}`);
+    throw new ApiError(data.error || data.message || `Fel ${res.status}`, res.status);
   }
   return data;
+}
+
+// ---------- Låsning (API-skydd) ----------
+
+function lockApp(message = '') {
+  const el = $('#lock-screen');
+  if (!el) return;
+  el.hidden = false;
+  document.body.classList.add('locked');
+  if (message) $('#lock-msg').textContent = message;
+  const hint = $('#lock-hint');
+  if (state.auth && state.auth.keyVar) {
+    hint.innerHTML = `Nyckeln sätts som miljövariabeln <code>${escapeHtml(state.auth.keyVar)}</code> på servern (Render → Environment).`;
+  }
+  setTimeout(() => $('#lock-key').focus(), 50);
+}
+
+function unlockApp() {
+  const el = $('#lock-screen');
+  if (el) el.hidden = true;
+  document.body.classList.remove('locked');
+  $('#lock-msg').textContent = '';
+}
+
+/** Kontrollerar om API:t kräver nyckel och om den vi har fungerar. */
+async function ensureUnlocked() {
+  let status;
+  try {
+    status = await fetch('/api/auth/status', { headers: authHeaders() }).then((r) => r.json());
+  } catch {
+    return true; // servern svarar inte – låt resten av appen visa felet
+  }
+  state.auth = status;
+  if (!status.required) {
+    unlockApp();
+    return true;
+  }
+  if (apiKey()) {
+    try {
+      await api('/api/setup');
+      unlockApp();
+      return true;
+    } catch (err) {
+      if (err.status !== 401) {
+        unlockApp();
+        return true; // nyckeln är rätt, något annat gick fel
+      }
+      setApiKey('');
+    }
+  }
+  lockApp(apiKey() ? 'Nyckeln stämmer inte – försök igen.' : '');
+  return false;
 }
 
 // ---------- Routing ----------
@@ -204,6 +290,9 @@ async function loadIntegrationer() {
     // Google
     loadGooglePanel();
 
+    // Driftstatus (lagring, kryptering, API-skydd)
+    loadSetupPanel();
+
     // Leverantörsformulär
     renderProviderForms();
 
@@ -313,31 +402,47 @@ function renderProviderForms() {
 // ---------- Google ----------
 
 async function loadGooglePanel() {
+  let g = null;
   try {
-    const g = await api('/api/google/status');
+    g = await api('/api/google/status');
+    state.google = g;
     $('#google-redirect-uri').textContent = g.redirectUri;
     $('#google-badge').textContent = g.connected ? `Kopplad: ${g.email}` : (g.configured ? 'Redo att logga in' : 'Ej konfigurerad');
     $('#google-badge').className = `badge ${g.connected ? 'badge-green' : ''}`;
     $('#google-connected').style.display = g.connected ? 'flex' : 'none';
     $('#google-login').style.display = g.connected ? 'none' : 'block';
-    $('#google-setup').open = !g.configured;
+    $('#google-setup').open = !g.configured && !g.canConnect;
     if (g.connected) {
       $('#google-name').textContent = g.name || g.email;
       $('#google-email').textContent = g.email;
       const av = $('#google-avatar');
       if (g.picture) { av.src = g.picture; av.style.display = 'block'; } else av.style.display = 'none';
     }
-    const loginBtn = $('#google-login .btn-google');
-    if (!g.configured) {
-      loginBtn.classList.add('disabled');
-      loginBtn.title = 'Fyll först i Client ID + Secret nedan';
-      loginBtn.onclick = (e) => { e.preventDefault(); $('#google-setup').open = true; toast('Fyll först i Client ID och Client Secret (engångsinställning).', 'err'); };
-    } else {
-      loginBtn.classList.remove('disabled');
-      loginBtn.onclick = null;
-    }
+    const loginBtn = $('#google-login-btn');
+    loginBtn.classList.toggle('disabled', !g.canConnect);
+    loginBtn.title = g.canConnect ? '' : `Klar först: ${g.missing.filter((m) => m.blocking).map((m) => m.label).join(' + ')}`;
     $('#google-client-id').placeholder = g.clientIdMasked || 'xxxx.apps.googleusercontent.com';
     $('#google-secret-hint').textContent = g.hasClientSecret ? 'Secret är sparad – lämna tomt för att behålla.' : '';
+
+    // Varför går det inte att logga in? Visa exakt vad som saknas.
+    const blockers = $('#google-blockers');
+    const toFix = g.missing.filter((m) => m.blocking);
+    if (toFix.length) {
+      blockers.hidden = false;
+      blockers.innerHTML = `
+        <div class="callout callout-warn">
+          <strong>Klar innan Google kan kopplas:</strong>
+          <ul>${toFix.map((m) => `<li><strong>${escapeHtml(m.label)}</strong><br><span class="muted">${escapeHtml(m.hint)}</span></li>`).join('')}</ul>
+          <div class="muted">Se <a href="#/integrationer" data-goto="driftstatus">Driftstatus</a> nedanför – den visar exakt vad som saknas på servern.</div>
+        </div>`;
+    } else if (g.tokenHealth && g.tokenHealth.stored && !g.tokenHealth.readable) {
+      blockers.hidden = false;
+      blockers.innerHTML = `<div class="callout callout-err">${escapeHtml(g.tokenHealth.error)}</div>`;
+    } else {
+      blockers.hidden = true;
+      blockers.innerHTML = '';
+    }
+
     $('#google-services').innerHTML = g.services.map((x) => `
       <div class="google-service ${g.connected ? 'on' : ''}">
         <span class="google-service-emoji">${x.emoji}</span>
@@ -345,18 +450,40 @@ async function loadGooglePanel() {
         <span class="badge ${g.connected ? 'badge-green' : ''}" style="margin-left:auto">${g.connected ? '✓' : '–'}</span>
       </div>`).join('');
   } catch (err) {
-    toast(err.message, 'err');
+    if (err.status !== 401) toast(err.message, 'err');
   }
 
   // Meddelande från OAuth-redirect (?google=ok / ?google_error=)
   const qs = location.hash.split('?')[1];
   if (qs) {
     const p = new URLSearchParams(qs);
-    if (p.get('google') === 'ok') toast(`✓ Google kopplat: ${p.get('email') || ''}`);
+    if (p.get('google') === 'ok') {
+      const where = p.get('storage') === 'supabase' ? 'sparas nu i din externa databas (krypterat)' : 'sparas lokalt på servern';
+      toast(`✓ Google kopplat: ${p.get('email') || ''} – inloggningen ${where}.`);
+    }
     if (p.get('google_error')) toast(p.get('google_error'), 'err');
     history.replaceState(null, '', '#/integrationer');
   }
 }
+
+$('#google-login-btn').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const g = state.google || {};
+  if (!g.canConnect) {
+    const toFix = (g.missing || []).filter((m) => m.blocking).map((m) => m.label);
+    if (!g.configured) $('#google-setup').open = true;
+    toast(toFix.length ? `Klar först: ${toFix.join(' + ')}` : 'Fyll först i Client ID och Client Secret (engångsinställning).', 'err');
+    document.querySelector('#driftstatus-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  try {
+    const r = await api('/api/google/auth-url', { method: 'POST' });
+    if (r.url) location.href = r.url;
+    else throw new Error('Kunde inte skapa inloggningslänken.');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+});
 
 $('#google-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -401,6 +528,96 @@ $('#google-disconnect').addEventListener('click', async () => {
   toast('Google frånkopplat');
   loadGooglePanel();
   loadOverview();
+});
+
+// ---------- Driftstatus (lagring, kryptering, API-skydd) ----------
+
+const CHECK_ICON = { ok: '✓', warn: '!', fail: '✕' };
+
+function renderSetupPanel(chk) {
+  const panel = $('#driftstatus-panel');
+  if (!panel) return;
+  const storage = chk.storage || {};
+  const where = storage.remote
+    ? `Supabase (tabell <code>${escapeHtml(storage.table || 'agent_flow_store')}</code>)`
+    : 'Lokal fil på serverns disk';
+  panel.querySelector('#setup-badge').textContent = chk.ok ? 'Allt klart' : (chk.blocking.length ? 'Behöver åtgärdas' : 'Fungerar');
+  panel.querySelector('#setup-badge').className = `badge ${chk.ok ? 'badge-green' : (chk.blocking.length ? 'badge-red' : '')}`;
+
+  panel.querySelector('#setup-checks').innerHTML = chk.checks.map((c) => `
+    <div class="setup-check ${c.status}">
+      <span class="setup-icon">${CHECK_ICON[c.status] || '·'}</span>
+      <div>
+        <div class="setup-label">${escapeHtml(c.label)}</div>
+        ${c.status === 'ok' ? '' : `<div class="setup-hint">${escapeHtml(c.hint)}</div>`}
+        ${c.error ? `<div class="setup-hint err">${escapeHtml(c.error)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  panel.querySelector('#setup-storage').innerHTML = `
+    <div><span class="muted">Lagring:</span> ${where}</div>
+    <div><span class="muted">Kryptering:</span> ${storage.encrypted ? 'AES-256-GCM (på)' : 'av – sätt ' + escapeHtml(chk.encryption.keyVar)}</div>
+    <div><span class="muted">API-skydd:</span> ${chk.auth.required ? 'på (' + escapeHtml(chk.auth.keyVar) + ')' : 'av – vem som helst kan nå API:t'}</div>
+    <div><span class="muted">Server:</span> ${chk.hosted ? 'hostad (Renders disk är tillfällig – därför krävs extern lagring)' : 'lokal körning'}</div>`;
+
+  panel.querySelector('#setup-sql').textContent = (storage.sql || '').trim();
+  panel.querySelector('#setup-envvars').textContent = [
+    `${chk.auth.keyVar}=<välj en lång slumpad sträng>`,
+    `${storage.envVars ? storage.envVars.url : 'SUPABASE_URL'}=https://DITT-PROJEKT.supabase.co`,
+    `${storage.envVars ? storage.envVars.key : 'SUPABASE_SERVICE_ROLE_KEY'}=<service_role-nyckeln från Supabase>`,
+    `${chk.encryption.keyVar}=<minst 32 slumpade tecken>`
+  ].join('\n');
+  panel.querySelector('#setup-sql-hint').textContent = storage.remote
+    ? 'Databasen är kopplad – SQL:en behövs bara om du skapar ett nytt projekt.'
+    : 'Kör SQL:en en gång i Supabase → SQL Editor, sätt variablerna i Render → Environment och starta om tjänsten.';
+}
+
+async function loadSetupPanel() {
+  try {
+    const chk = await api('/api/setup');
+    state.setup = chk;
+    renderSetupPanel(chk);
+    renderSetupBanner(chk);
+  } catch (err) {
+    if (err.status !== 401) toast(err.message, 'err');
+  }
+}
+
+function renderSetupBanner(chk) {
+  const el = $('#setup-banner');
+  if (!el) return;
+  const blocking = chk.checks.filter((c) => c.status === 'fail');
+  const warns = chk.hosted ? chk.checks.filter((c) => c.status === 'warn') : [];
+  const list = blocking.length ? blocking : warns;
+  if (!list.length) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  el.hidden = false;
+  el.className = `setup-banner ${blocking.length ? 'fail' : 'warn'}`;
+  el.innerHTML = `
+    <span class="setup-banner-icon">${blocking.length ? '⛔' : '⚠'}</span>
+    <div>
+      <strong>${blocking.length ? 'Innan Google kan kopplas saknas:' : 'Rekommenderas för drift:'}</strong>
+      ${list.map((c) => escapeHtml(c.label)).join(' · ')}
+      <div class="muted">${blocking.length
+        ? 'Appen fungerar som vanligt, men Google-inloggningen skulle försvinna vid en omstart.'
+        : 'Utan detta kan inloggningen tappas när gratisinstansen startar om.'}
+      </div>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="#/integrationer" id="setup-banner-link">Visa guide</a>`;
+  $('#setup-banner-link').onclick = () => setTimeout(() => $('#driftstatus-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
+
+$('#setup-copy-sql')?.addEventListener('click', async () => {
+  const sql = $('#setup-sql').textContent;
+  try {
+    await navigator.clipboard.writeText(sql);
+    toast('SQL:en kopierad – kör den i Supabase → SQL Editor.');
+  } catch {
+    toast('Kunde inte kopiera automatiskt – markera texten och kopiera manuellt.', 'err');
+  }
 });
 
 // ---------- Botar ----------
@@ -906,7 +1123,7 @@ async function sendMessage(text) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         providerId: state.providerId,
         model: state.model,
@@ -914,6 +1131,9 @@ async function sendMessage(text) {
       })
     });
 
+    if (res.status === 401) {
+      throw new ApiError('API:t kräver en åtkomstnyckel (APP_API_KEY).', 401);
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.message || data.error || `Fel ${res.status}`);
@@ -972,6 +1192,7 @@ async function sendMessage(text) {
   } catch (err) {
     setAssistantText(asst, `⚠ ${err.message}`);
     toast(err.message, 'err');
+    if (err.status === 401) lockApp(err.message);
   } finally {
     state.busy = false;
     $('#send-btn').disabled = false;
@@ -1028,17 +1249,55 @@ function bindPromptButtons() {
 
 // ---------- Init ----------
 
-async function init() {
+/** Startar appen efter att API-nyckeln (om någon krävs) fungerar. */
+async function startApp() {
+  unlockApp();
   bindPromptButtons();
   navigate();
   try {
     const data = await api('/api/providers');
     state.providers = data.providers;
     setSidebarStatus('warn', 'Kontrollerar kopplingar…');
-  } catch {
-    setSidebarStatus('warn', 'Servern svarar inte');
+  } catch (err) {
+    if (err.status !== 401) setSidebarStatus('warn', 'Servern svarar inte');
   }
   loadOverview();
+  loadSetupPanel();
+}
+
+$('#lock-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const key = $('#lock-key').value.trim();
+  if (!key) return;
+  setApiKey(key);
+  try {
+    await api('/api/setup');
+    $('#lock-key').value = '';
+    toast('Upplåst ✓');
+    startApp();
+  } catch (err) {
+    setApiKey('');
+    $('#lock-msg').textContent = err.status === 401 ? 'Nyckeln stämmer inte. Kontrollera APP_API_KEY i Render → Environment.' : err.message;
+  }
+});
+
+$('#lock-logout')?.addEventListener('click', () => {
+  setApiKey('');
+  lockApp('Nyckeln är borttagen från webbläsaren.');
+});
+
+// Länkar som ska scrolla till en panel i stället för att byta sida
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('[data-goto]');
+  if (!link) return;
+  const target = $(`#${link.dataset.goto}-panel`);
+  if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+});
+
+async function init() {
+  const unlocked = await ensureUnlocked();
+  if (!unlocked) return; // låsskärmen tar över
+  startApp();
 }
 
 init();
