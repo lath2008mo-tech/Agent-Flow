@@ -134,7 +134,8 @@ async function rest(url, options = {}) {
       const parsed = JSON.parse(text);
       detail = parsed.message || parsed.hint || parsed.error || detail;
     } catch { /* råtext duger */ }
-    const err = new Error(`Supabase ${res.status}: ${detail}`);
+    const hint = tableHint(res.status, detail);
+    const err = new Error(`Supabase ${res.status}: ${detail}${hint}`);
     err.status = res.status;
     throw err;
   }
@@ -144,6 +145,17 @@ async function rest(url, options = {}) {
   } catch {
     return null;
   }
+}
+
+/** Gör vanliga Supabase-fel begripliga på svenska. */
+function tableHint(status, detail = '') {
+  if (/does not exist|schema cache|PGRST205/i.test(detail) || status === 404) {
+    return `\n→ Tabellen "${TABLE}" finns inte i databasen. Kör SQL:en under Integrationer → Driftstatus (Supabase → SQL Editor), eller byt namn med SUPABASE_TABLE.`;
+  }
+  if (status === 401 || status === 403) {
+    return '\n→ Nyckeln avvisades. Använd service_role-nyckeln från Supabase → Settings → API (inte anon-nyckeln).';
+  }
+  return '';
 }
 
 async function pullRemote(name) {

@@ -142,6 +142,22 @@ Assistenten kan bl.a.:
 - `create_discount`, `list_discounts`
 - `shop_stats`, `get_shop_info`
 
+## 📋 Guide: Supabase på Render Free
+
+Steg-för-steg med exakta klick och kommandon (och felsökning):
+**[docs/DEPLOY-SUPABASE.md](docs/DEPLOY-SUPABASE.md)**
+
+Snabbtest av din konfiguration i terminalen:
+
+```bash
+# 1. Testa databasen innan du kopplar Google (läser miljövariablerna)
+node --env-file=.env scripts/check-storage.js
+
+# 2. Kontrollera den deployade appen – körs två gånger, andra gången efter
+#    en omstart i Render, så jämförs tidsstämpeln automatiskt
+node scripts/verify-deploy.js https://agent-flow-f2oo.onrender.com --api-key=DIN_APP_API_KEY
+```
+
 ## 🧪 Tester
 
 ```bash
